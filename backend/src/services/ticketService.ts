@@ -593,8 +593,9 @@ export const ticketService = {
    * Human answers (admin). Inserts a HUMAN comment.
    * If handBackToAi: also set status=TODO, owner=AI, clear solution+resolvedAt.
    * Guard: handBackToAi is only allowed when ticket is ON_HOLD+HUMAN.
-   * If clearFullyReady: also set fullyReady=0. Independent of handBackToAi,
-   * but still gated behind the same guard above (throws before stmts is built).
+   * If clearFullyReady: also set fullyReady=0. Independent of handBackToAi in effect —
+   * applies from any status/owner. Only blocked when handBackToAi is also sent and its
+   * guard throws; that throw happens before stmts is built, so nothing partial ever lands.
    * All in one batch.
    */
   async addComment(
