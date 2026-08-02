@@ -49,6 +49,49 @@ async function ensureSzenarioAgileKiColumn(): Promise<void> {
   }
 }
 
+// Idempotent guarded ALTER for existing databases created before fullyReady
+// existed. `CREATE TABLE IF NOT EXISTS` never touches an already-existing
+// table, so upgraded DBs need this column added explicitly.
+//
+// The ALTER step is split into its own exported function so the migration
+// test suite can fire the ALTER directly against a table that already has
+// the column, without relying on real concurrency timing to hit the catch
+// block below.
+//
+// The try/catch swallowing "duplicate column" is a concurrent-cold-start
+// guard: on Vercel, multiple serverless instances can cold-start concurrently
+// against the same Turso DB (each has its own `initPromise`, not shared
+// cross-instance — see `api/index.ts`). Two instances can both pass the
+// `table_info` check below and both attempt the ALTER; SQLite has no
+// `ADD COLUMN IF NOT EXISTS`, so the loser fails with "duplicate column
+// name". Swallow only that error — mirrors ensureSzenarioAgileKiColumn()
+// above — and re-throw anything else so a real migration failure is never
+// hidden.
+export async function alterTicketAddFullyReadyColumn(): Promise<void> {
+  try {
+    await client.execute(
+      'ALTER TABLE ticket ADD COLUMN fullyReady INTEGER NOT NULL DEFAULT 0'
+    );
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('duplicate column')) {
+      return;
+    }
+    throw err;
+  }
+}
+
+export async function ensureTicketFullyReadyColumn(): Promise<void> {
+  // Standalone execute (not batched) — PRAGMA statements are ignored inside a
+  // transaction/batch, same reasoning as the PRAGMA foreign_keys call above.
+  const info = await client.execute('PRAGMA table_info(ticket)');
+  const hasColumn = info.rows.some((row) => row.name === 'fullyReady');
+  if (hasColumn) {
+    return;
+  }
+
+  await alterTicketAddFullyReadyColumn();
+}
+
 export async function runMigrations(): Promise<void> {
   console.log('Running database migrations...');
 
@@ -173,6 +216,7 @@ export async function runMigrations(): Promise<void> {
       -- to pick this up -- CREATE TABLE IF NOT EXISTS does not alter an existing table.
       status      TEXT NOT NULL DEFAULT 'DEFINITION' CHECK (status IN ('DEFINITION','TODO','IN_PROGRESS','ON_HOLD','DONE')),
       solution    TEXT,
+      fullyReady  INTEGER NOT NULL DEFAULT 0,
       pickedUpAt  TEXT,
       resolvedAt  TEXT,
       createdAt   TEXT NOT NULL DEFAULT (datetime('now')),
@@ -242,6 +286,7 @@ export async function runMigrations(): Promise<void> {
   // independent of the firma-empty guard in runDataMigration(). Existing rows
   // (e.g. DONE/REJECTED/IN_PROGRESS) are never overwritten.
   await seedAgentTasks();
+  await ensureTicketFullyReadyColumn();
   await seedTickets();
   await ensureSzenarioAgileKiColumn();
   await seedSzenario();

@@ -2,8 +2,8 @@
 name: "project:write-ticket"
 description: "Headless autonomous skill that claims one agent-task feedback item (or takes a task ID, a task URL, or free-floating feedback text), judges it, and files a new Kanban ticket (Definition, owner HUMAN) from it — commenting on the ticket to demand missing info when the feedback is too thin. Never builds, pushes, or opens a PR."
 argument-hint: "[task-id | task-url | feedback-text]"
-version: 1.4.0
-last-modified: 2026-07-08
+version: 1.5.0
+last-modified: 2026-08-02
 allowed-tools:
   - Read
   - Bash
@@ -162,15 +162,17 @@ Den `body` als Markdown-Vorlage mit vier Abschnitten aufbauen, in genau dieser R
 
 `type` und `title` wie bisher setzen.
 
+Für `fullyReady`: Setze auf `true`, wenn das Urteil aus Schritt 2 „gut genug zum Bauen" ist, ansonsten auf `false`.
+
 ```bash
 curl -s -w '\n%{http_code}' -X POST \
   -H "Authorization: Bearer $AGENT_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"type": "<Typ aus Schritt 2, Default FEATURE>", "title": "<Titel aus dem Feedback>", "body": "<Markdown-Vorlage: #### Feedback, dann #### Fachlich (für Business), dann #### Technisch (für Entwickler), dann #### Akzeptanzkriterien>"}' \
+  -d '{"type": "<Typ aus Schritt 2, Default FEATURE>", "title": "<Titel aus dem Feedback>", "body": "<Markdown-Vorlage: #### Feedback, dann #### Fachlich (für Business), dann #### Technisch (für Entwickler), dann #### Akzeptanzkriterien>", "fullyReady": <true bei „gut genug zum Bauen", sonst false>}' \
   "${APP_BASE_URL:-http://localhost:7070}/api/tickets"
 ```
 
-**Wichtig:** Der komplette mehrteilige Body — alle vier Abschnitte, inklusive Zeilenumbrüche und Zitat-Markup (`>`) — muss vollständig als JSON-String escaped werden, bevor er in `-d` landet. Sonst ist das JSON ungültig.
+**Wichtig:** Der komplette mehrteilige Body — alle vier Abschnitte, inklusive Zeilenumbrüche und Zitat-Markup (`>`) — muss vollständig als JSON-String escaped werden, bevor er in `-d` landet. Sonst ist das JSON ungültig. `fullyReady` dagegen ist ein reines JSON-Boolean (`true` oder `false`, ohne Anführungszeichen) — wird NICHT als String escaped, im Gegensatz zu `type`/`title`/`body`.
 
 Body und HTTP-Code separat aus der Ausgabe lesen (`body` = alles vor der letzten Zeile, `http_code` = letzte Zeile).
 
@@ -200,7 +202,7 @@ Der Endpunkt speichert den Kommentar immer als `author=HUMAN` — unabhängig da
 
 ## Schritt 3b — Feedback gut genug
 
-Nichts weiter am Ticket tun. Kein Kommentar, keine Status- oder Owner-Änderung. Das Ticket bleibt in `DEFINITION` bei `owner=HUMAN` und wartet dort auf einen Menschen zur weiteren Verfeinerung oder Übergabe an die KI. Der Ticket-Body trägt bereits alle drei Abschnitte — Fachlich, Technisch und Akzeptanzkriterien — aus Schritt 3. Deshalb kein Kommentar nötig.
+Nichts weiter am Ticket tun. Kein Kommentar, keine Status- oder Owner-Änderung. Das Ticket bleibt in `DEFINITION` bei `owner=HUMAN`, trägt aber jetzt `fullyReady=true`. Dadurch kann `do-fully-automatic` es direkt aufgreifen und selbst nach „Bereit" befördern — ohne dass erst ein Mensch klickt. Ein Mensch kann das Ticket trotzdem vorher verfeinern, falls er zuerst dazu kommt. Der Ticket-Body trägt bereits alle drei Abschnitte — Fachlich, Technisch und Akzeptanzkriterien — aus Schritt 3. Deshalb kein Kommentar nötig.
 
 Weiter zu Schritt 4. Im Freitext-Modus entfällt Schritt 4 (siehe dort) — dann direkt weiter zu Schritt 5 (Abschluss-Print), erst danach beenden.
 
@@ -221,7 +223,7 @@ DONE_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
 Für `<Zusatz je nach Zweig>`:
 
 - Nach Schritt 3a: „Rückfrage im Ticket hinterlegt."
-- Nach Schritt 3b: „bereit zur Verfeinerung."
+- Nach Schritt 3b: „als fullyReady markiert — KI kann es automatisch aufgreifen."
 
 HTTP-Code prüfen:
 

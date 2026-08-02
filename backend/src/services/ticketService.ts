@@ -31,6 +31,7 @@ export interface TicketDTO {
   body: string;
   status: string;
   solution: string | null;
+  fullyReady: boolean;
   pickedUpAt: string | null;
   resolvedAt: string | null;
   createdAt: string;
@@ -46,6 +47,7 @@ export interface TicketListItemDTO {
   body: string;
   status: string;
   solution: string | null;
+  fullyReady: boolean;
   pickedUpAt: string | null;
   resolvedAt: string | null;
   createdAt: string;
@@ -93,6 +95,7 @@ interface TicketRow {
   body: string;
   status: string;
   solution: string | null;
+  fullyReady: number;
   pickedUpAt: string | null;
   resolvedAt: string | null;
   createdAt: string;
@@ -134,6 +137,7 @@ function toDTO(row: TicketRow, comments: TicketCommentDTO[]): TicketDTO {
     body: row.body,
     status: row.status,
     solution: row.solution,
+    fullyReady: Boolean(row.fullyReady),
     pickedUpAt: row.pickedUpAt,
     resolvedAt: row.resolvedAt,
     createdAt: row.createdAt,
@@ -151,6 +155,7 @@ function toListItemDTO(row: TicketListRow): TicketListItemDTO {
     body: row.body,
     status: row.status,
     solution: row.solution,
+    fullyReady: Boolean(row.fullyReady),
     pickedUpAt: row.pickedUpAt,
     resolvedAt: row.resolvedAt,
     createdAt: row.createdAt,
@@ -531,13 +536,14 @@ export const ticketService = {
     type: TicketType;
     title: string;
     body: string;
+    fullyReady?: boolean;
   }): Promise<TicketDTO> {
     const now = new Date().toISOString();
     const result = await client.execute({
-      sql: `INSERT INTO ticket (owner, type, title, body, status, solution, pickedUpAt, resolvedAt, createdAt, updatedAt)
-            VALUES ('HUMAN', ?, ?, ?, 'DEFINITION', NULL, NULL, NULL, ?, ?)
+      sql: `INSERT INTO ticket (owner, type, title, body, status, solution, fullyReady, pickedUpAt, resolvedAt, createdAt, updatedAt)
+            VALUES ('HUMAN', ?, ?, ?, 'DEFINITION', NULL, ?, NULL, NULL, ?, ?)
             RETURNING *`,
-      args: [data.type, data.title, data.body, now, now],
+      args: [data.type, data.title, data.body, data.fullyReady ? 1 : 0, now, now],
     });
     const row = result.rows[0] as unknown as TicketRow;
     return toDTO(row, []);
@@ -587,12 +593,16 @@ export const ticketService = {
    * Human answers (admin). Inserts a HUMAN comment.
    * If handBackToAi: also set status=TODO, owner=AI, clear solution+resolvedAt.
    * Guard: handBackToAi is only allowed when ticket is ON_HOLD+HUMAN.
+   * If clearFullyReady: also set fullyReady=0. Independent of handBackToAi in effect —
+   * applies from any status/owner. Only blocked when handBackToAi is also sent and its
+   * guard throws; that throw happens before stmts is built, so nothing partial ever lands.
    * All in one batch.
    */
   async addComment(
     id: number,
     body: string,
     handBackToAi?: boolean,
+    clearFullyReady?: boolean,
   ): Promise<TicketDTO> {
     // Verify ticket exists first (throws 404 if missing)
     const ticket = await this.findById(id);
@@ -620,6 +630,13 @@ export const ticketService = {
         sql: `UPDATE ticket
               SET status = 'TODO', owner = 'AI', solution = NULL, resolvedAt = NULL, updatedAt = ?
               WHERE id = ?`,
+        args: [now, id],
+      });
+    }
+
+    if (clearFullyReady) {
+      stmts.push({
+        sql: `UPDATE ticket SET fullyReady = 0, updatedAt = ? WHERE id = ?`,
         args: [now, id],
       });
     }

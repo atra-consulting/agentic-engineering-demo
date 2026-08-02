@@ -128,6 +128,7 @@ export const ticket = sqliteTable('ticket', {
   body: text('body').notNull(),
   status: text('status', { enum: TICKET_STATUS }).notNull().default('DEFINITION'),
   solution: text('solution'),
+  fullyReady: integer('fullyReady', { mode: 'boolean' }).notNull().default(false),
   pickedUpAt: text('pickedUpAt'),
   resolvedAt: text('resolvedAt'),
   createdAt: text('createdAt').notNull().default(sql`(datetime('now'))`),

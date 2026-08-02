@@ -1,8 +1,8 @@
 ---
 name: "project:do-fully-automatic"
-description: "Headless skill that works one Kanban ticket per run — either Ready (TODO+AI) or Definition+AI (assigned to the AI via 'An KI übergeben' but not yet promoted). Judges it with requirements-reviewer: builds via plan-and-do (promoting a Definition+AI ticket to Ready itself first when ready), or sends it back to Definition (owner HUMAN) with a comment when not. An unsolvable problem during implementation still moves the ticket to Blocked, exactly like do-semi-automatic. No push, no PR. For headless claude -p runs."
+description: "Headless skill that works one Kanban ticket per run — Ready (TODO+AI), Definition+AI (assigned to the AI via 'An KI übergeben' but not yet promoted), or Definition+fullyReady (flagged automatically by write-ticket, not yet promoted). Judges it with requirements-reviewer: builds via plan-and-do (promoting a Definition+AI ticket to Ready itself first when ready, or promoting a Definition+fullyReady ticket via a mandatory two-call status-then-owner sequence), or sends it back to Definition (owner HUMAN) with a comment when not. An unsolvable problem during implementation still moves the ticket to Blocked, exactly like do-semi-automatic. No push, no PR. For headless claude -p runs."
 argument-hint: "[ticket-id | ticket-url] [comment]"
-version: 1.0.0
+version: 1.1.1
 last-modified: 2026-08-02
 allowed-tools:
   - Read
@@ -15,14 +15,14 @@ allowed-tools:
 
 Du bist ein autonomer Software-Ingenieur. Du läufst **headless** (`claude -p`) — kein Mensch kann Fragen beantworten. Entscheide alles selbst. Halte nie an, um Eingaben abzuwarten. Rufe niemals `AskUserQuestion` auf.
 
-Auftrag: Ein Ticket finden — entweder schon „Bereit" und der KI zugewiesen, oder in „Definition" liegend und der KI zugewiesen (aber noch nicht befördert) — seinen Thread lesen, beurteilen ob es baubar bzw. beförderungsreif ist, und es dann entweder vollständig umsetzen (bei Definition+KI: erst selbst nach „Bereit" befördern) oder zurück auf Definition geben — unbeaufsichtigt. Ein Ticket pro Durchlauf.
+Auftrag: Ein Ticket finden — schon „Bereit" und der KI zugewiesen, in „Definition" liegend und der KI zugewiesen (aber noch nicht befördert), oder in „Definition" liegend und von `write-ticket` automatisch als `fullyReady` markiert (ebenfalls noch nicht befördert) — seinen Thread lesen, beurteilen ob es baubar bzw. beförderungsreif ist, und es dann entweder vollständig umsetzen (bei Definition+KI oder Definition+fullyReady: erst selbst nach „Bereit" befördern) oder zurück auf Definition geben — unbeaufsichtigt. Ein Ticket pro Durchlauf.
 
 API-Referenz: `docs/specs/SPEC-API-TICKETS.md` (Abschnitt „For skill authors").
 
 ## Konfiguration
 
 - API-Basis-URL: Umgebungsvariable `APP_BASE_URL`, sonst `http://localhost:7070`.
-- Auth-Header bei **jedem** API-Aufruf: `Authorization: Bearer $AGENT_API_TOKEN`. Lokal greift statt dessen der Loopback-Bypass (`AGENT_AUTH_ALLOW_LOOPBACK=1`), falls kein Header gesetzt ist — reiner Hintergrund-Kontext, dieser Skill sendet den Header immer, da Schritt 0 ohne gesetztes `AGENT_API_TOKEN` sofort abbricht. Dieser Skill nutzt **ausschließlich** den Agent-Token — kein Admin-Login, keine Admin-Session, keine Admin-Zugangsdaten an irgendeiner Stelle. Das gilt auch für `GET /api/tickets/board` und `PATCH /api/tickets/:id/status` — beide akzeptieren zusätzlich zur Admin-Session auch den Agent-Token bzw. den Loopback-Bypass.
+- Auth-Header bei **jedem** API-Aufruf: `Authorization: Bearer $AGENT_API_TOKEN`. Lokal greift statt dessen der Loopback-Bypass (`AGENT_AUTH_ALLOW_LOOPBACK=1`), falls kein Header gesetzt ist — reiner Hintergrund-Kontext, dieser Skill sendet den Header immer, da Schritt 0 ohne gesetztes `AGENT_API_TOKEN` sofort abbricht. Dieser Skill nutzt **ausschließlich** den Agent-Token — kein Admin-Login, keine Admin-Session, keine Admin-Zugangsdaten an irgendeiner Stelle. Das gilt auch für `GET /api/tickets/board`, `PATCH /api/tickets/:id/status` und `PATCH /api/tickets/:id/owner` — alle drei akzeptieren zusätzlich zur Admin-Session auch den Agent-Token bzw. den Loopback-Bypass.
 - Ein Ticket pro Durchlauf.
 
 ## Parameter
@@ -33,8 +33,8 @@ Lies das Argument als `<erstes Token> [Rest…]`. Das **erste Token** (bis zum e
 
 Drei Eingabemodi, je nach erstem Token. In dieser Reihenfolge prüfen:
 
-1. **Leer** (kein Argument) → das nächste Ticket suchen — zuerst Ready+AI, sonst Definition+AI (Schritt 1, Board-Zweig). Kein `Hinweis` möglich — es gibt kein benanntes Ticket, an das er sich hängen könnte.
-2. **Reine Zahl** als erstes Token (z. B. `/do-fully-automatic 8` oder `/do-fully-automatic 8 bitte nur das Backend anfassen`) → Ticket-ID. Die „Nächstes Ticket finden"-Auswahl in Schritt 1 überspringen. Statt dessen das Ticket per ID laden und prüfen, ob es Ready+AI oder Definition+AI ist (ID-Zweig unten). Der Rest nach dem ersten Token ist der optionale `Hinweis`.
+1. **Leer** (kein Argument) → das nächste Ticket suchen — zuerst Ready+AI, dann Definition+AI, sonst Definition+fullyReady (Schritt 1, Board-Zweig). Kein `Hinweis` möglich — es gibt kein benanntes Ticket, an das er sich hängen könnte.
+2. **Reine Zahl** als erstes Token (z. B. `/do-fully-automatic 8` oder `/do-fully-automatic 8 bitte nur das Backend anfassen`) → Ticket-ID. Die „Nächstes Ticket finden"-Auswahl in Schritt 1 überspringen. Statt dessen das Ticket per ID laden und prüfen, ob es Ready+AI, Definition+AI oder Definition+fullyReady ist (ID-Zweig unten). Der Rest nach dem ersten Token ist der optionale `Hinweis`.
 3. **Ticket-URL** als erstes Token (z. B. `/do-fully-automatic http://localhost:7200/admin/tickets/11` oder mit angehängtem `Hinweis`) → auch eine Ticket-ID. **Nur** wenn das erste Token eine URL ist — es beginnt mit `http://`, `https://`, `/admin/` oder `/api/`. Dann die Ziffern nach `tickets/` als ID herausziehen (`11`) und wie eine Ticket-ID behandeln. Das Muster `tickets/<Ziffern>` matcht sowohl die Admin-URL (`/admin/tickets/11`) als auch die API-URL (`/api/tickets/11`); ein Schrägstrich, ein `?` oder das Ende danach ist erlaubt. Enthält die URL kein `tickets/<Ziffern>` (z. B. `.../tickets/board` oder `.../tickets/next`) → Fehler ausgeben und **beenden**. Der Rest nach dem ersten Token ist der optionale `Hinweis`.
 
 Dieser Skill kennt **keinen** Freitext-Modus für das erste Token. Nur das **erste Token** muss reine Zahl oder URL sein — Text danach ist der optionale `Hinweis`, kein Fehler. Ist das erste Token weder reine Zahl noch URL (z. B. Prosa wie „Die Seite /admin/tickets/11 hängt", die mit einem Wort beginnt), ist das Argument ungültig → Fehler ausgeben und **beenden**.
@@ -70,11 +70,11 @@ fi
 
 Wenn `AGENT_API_TOKEN` leer oder ungesetzt ist: sofort beenden. Keine weiteren Schritte. Keine API-Aufrufe.
 
-## Schritt 1 — Nächstes Ticket finden (Ready oder Definition+AI; NICHT starten/befördern)
+## Schritt 1 — Nächstes Ticket finden (Ready, Definition+AI oder Definition+fullyReady; NICHT starten/befördern)
 
 *(Überspringen, wenn eine Ticket-ID oder Ticket-URL als Parameter übergeben wurde — dann den ID-Zweig unten nutzen.)*
 
-**Wichtig:** Dieser Schritt mutiert nichts — kein Claim, keine Beförderung. Ein READY-Ticket bleibt `TODO`, ein DEFINITION_AI-Ticket bleibt `DEFINITION`. Der Wechsel nach `IN_PROGRESS` (Claim) und jede Beförderung nach `TODO` passieren ausschließlich in Schritt 3b.
+**Wichtig:** Dieser Schritt mutiert nichts — kein Claim, keine Beförderung. Das gilt für alle drei Ticket-Klassen: Ein READY-Ticket bleibt `TODO`, ein DEFINITION_AI- oder DEFINITION_READY-Ticket bleibt `DEFINITION`. Der Wechsel nach `IN_PROGRESS` (Claim) und jede Beförderung nach `TODO` passieren ausschließlich in Schritt 3b.
 
 ```bash
 curl -s -w '\n%{http_code}' \
@@ -87,8 +87,9 @@ Body und HTTP-Code separat aus der Ausgabe lesen (`body` = alles vor der letzten
 - HTTP `200` → JSON parsen.
   - Zuerst das `TODO`-Array (Spalte „Zu bereit") prüfen, bereits nach `createdAt ASC` sortiert. Ältestes Ticket mit `owner=="AI"` → `ticket_class = READY`, dieses Ticket wählen.
   - Kein solches Ticket im `TODO`-Array → das `DEFINITION`-Array (Spalte „Definition") prüfen, ebenfalls nach `createdAt ASC` sortiert. Ältestes Ticket mit `owner=="AI"` → `ticket_class = DEFINITION_AI`, dieses Ticket wählen.
-  - Auch dort keins → „Keine Tickets bereit für AI (weder Bereit+KI noch Definition+KI)." ausgeben und **beenden**.
-  - READY hat Vorrang: ein Bereit-Ticket ist bereits vollständig vetted und braucht keine Beförderung. DEFINITION_AI ist nur ein Fallback, wenn die Bereit-Warteschlange leer ist.
+  - Auch dort keins → **dasselbe** `DEFINITION`-Array **erneut** durchsuchen, diesmal nach dem ältesten Ticket mit `fullyReady==true` (unabhängig vom `owner`) → `ticket_class = DEFINITION_READY`, dieses Ticket wählen. Zwei aufeinanderfolgende, vollständige Durchläufe über das Array — nicht eine Prüfung pro Eintrag in einem einzigen Durchlauf. Nur so gilt die Vorrang-Regel (READY > DEFINITION_AI > DEFINITION_READY) automatisch: ein Ticket, das sowohl `owner=="AI"` als auch `fullyReady==true` ist, wird immer schon vom ersten Durchlauf erfasst und landet nie im zweiten.
+  - Auch dort keins → „Keine Tickets bereit für AI (weder Bereit+KI, Definition+KI noch Definition+fullyReady)." ausgeben und **beenden**.
+  - Vorrang: READY vor DEFINITION_AI vor DEFINITION_READY. Ein Bereit-Ticket ist bereits vollständig vetted und braucht keine Beförderung. DEFINITION_AI ist ein Fallback, wenn die Bereit-Warteschlange leer ist. DEFINITION_READY ist der letzte Fallback, wenn auch dort nichts wartet.
 - Jeder andere Code → Fehler ausgeben und **beenden**.
 
 Dann das volle Ticket laden:
@@ -99,7 +100,7 @@ curl -s -w '\n%{http_code}' \
   "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>"
 ```
 
-- HTTP `200` → JSON parsen. `id`, `title`, `body` und das **`comments`**-Array behalten, `ticket_class` aus dem Board-Schritt beibehalten. Weiter zu Schritt 2.
+- HTTP `200` → JSON parsen. `id`, `title`, `body`, `fullyReady` und das **`comments`**-Array behalten, `ticket_class` aus dem Board-Schritt beibehalten. Weiter zu Schritt 2.
 - Jeder andere Code → Fehler ausgeben und **beenden**.
 
 **Wenn eine Ticket-ID als Parameter übergeben wurde**, statt dessen:
@@ -113,13 +114,14 @@ curl -s -w '\n%{http_code}' \
 ```
 
 - HTTP `404` → „Ticket nicht gefunden." ausgeben und **beenden**.
-- HTTP `200` → JSON parsen. `id`, `title`, `body`, `status`, `owner` und das **`comments`**-Array behalten.
+- HTTP `200` → JSON parsen. `id`, `title`, `body`, `status`, `owner`, `fullyReady` und das **`comments`**-Array behalten.
   - `status=="TODO" && owner=="AI"` → `ticket_class = READY`. Weiter zu Schritt 2. Ticket bleibt `TODO` — noch nicht starten.
   - `status=="DEFINITION" && owner=="AI"` → `ticket_class = DEFINITION_AI`. Weiter zu Schritt 2. Ticket bleibt `DEFINITION` — noch nicht befördern.
-  - Alles andere → „Ticket <id>: status=<status>, owner=<owner> — Skill verarbeitet nur Bereit+KI oder Definition+KI Tickets. Durchlauf beendet." ausgeben und **beenden**.
+  - Sonst: `status=="DEFINITION" && fullyReady==true` → `ticket_class = DEFINITION_READY`. Weiter zu Schritt 2. Ticket bleibt `DEFINITION` — noch nicht befördern.
+  - Alles andere → „Ticket <id>: status=<status>, owner=<owner>, fullyReady=<fullyReady> — Skill verarbeitet nur Bereit+KI, Definition+KI oder Definition+fullyReady Tickets. Durchlauf beendet." ausgeben und **beenden**.
 - Jeder andere Code → Fehler ausgeben und **beenden**.
 
-**Wenn eine Ticket-URL übergeben wurde**: die Ziffern nach `tickets/` als `<ID>` herausziehen und exakt den ID-Zweig oben ausführen (laden, `status`/`owner`-Prüfung). Kein eigener Ablauf.
+**Wenn eine Ticket-URL übergeben wurde**: die Ziffern nach `tickets/` als `<ID>` herausziehen und exakt den ID-Zweig oben ausführen (laden, `status`/`owner`/`fullyReady`-Prüfung). Kein eigener Ablauf.
 
 ## Schritt 2 — Thread lesen
 
@@ -146,13 +148,13 @@ Dem Urteil des Subagenten ohne Abweichung folgen.
 
 ## Schritt 3a — Nicht gut genug → zurück auf Definition + Human
 
-*(NICHT ablehnen, `plan-and-do` NICHT aufrufen. Gilt für beide Ticket-Klassen — READY und DEFINITION_AI.)*
+*(NICHT ablehnen, `plan-and-do` NICHT aufrufen. Gilt für alle drei Ticket-Klassen — READY, DEFINITION_AI und DEFINITION_READY.)*
 
 Ein optionaler `Hinweis` bleibt hier ungenutzt — dieser Zweig ruft `plan-and-do` nicht auf.
 
 Der Reihe nach, jeweils mit dem Agent-Token. Nach jedem Aufruf den HTTP-Code prüfen (siehe „Fehlerbehandlung bei mutierenden Aufrufen" oben) — schlägt einer fehl, sofort beenden und **nicht** als „zurückgegeben" melden:
 
-1. Kommentar hinterlassen, der genau benennt, was fehlt bzw. welche Entscheidung offen ist:
+1. Kommentar hinterlassen, der genau benennt, was fehlt bzw. welche Entscheidung offen ist. **Nur bei `ticket_class == DEFINITION_READY`** zusätzlich `"clearFullyReady": true` in den JSON-Body aufnehmen — das Flag muss beim Zurückgeben gelöscht werden, sonst würde ein späterer Lauf dasselbe Ticket sofort wieder als DEFINITION_READY einsammeln (Spam-Schleife). Bei `READY`/`DEFINITION_AI` bleibt der Body unverändert, ohne `clearFullyReady`:
 
    ```bash
    COMMENT_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
@@ -162,7 +164,17 @@ Der Reihe nach, jeweils mit dem Agent-Token. Nach jedem Aufruf den HTTP-Code pr�
      "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>/comments")
    ```
 
-2. Owner auf `HUMAN` setzen:
+   Bei `ticket_class == DEFINITION_READY` statt dessen:
+
+   ```bash
+   COMMENT_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+     -H "Authorization: Bearer $AGENT_API_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"body": "GENAU WAS FEHLT ODER UNKLAR IST, damit ein Mensch das Ticket vervollständigen kann", "clearFullyReady": true}' \
+     "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>/comments")
+   ```
+
+2. Owner auf `HUMAN` setzen (bei `ticket_class == DEFINITION_READY` in aller Regel ein No-op — `owner` war bei der Klassifizierung in Schritt 1 wegen der Vorrang-Regel dort `HUMAN`; hat sich das zwischenzeitlich geändert, setzt dieser Aufruf ihn trotzdem korrekt zurück. Der Aufruf läuft in jedem Fall unverändert mit, derselbe Code-Pfad wie bei den anderen beiden Klassen):
 
    ```bash
    OWNER_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH \
@@ -182,15 +194,15 @@ Der Reihe nach, jeweils mit dem Agent-Token. Nach jedem Aufruf den HTTP-Code pr�
      "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>/status")
    ```
 
-   Für `ticket_class == DEFINITION_AI` wird dieser Aufruf **übersprungen** — das Ticket ist bereits in `DEFINITION`. Das ist keine Regression: das Ticket hat `DEFINITION` nie verlassen.
+   Für `ticket_class == DEFINITION_AI` und `ticket_class == DEFINITION_READY` wird dieser Aufruf **übersprungen** — das Ticket ist bereits in `DEFINITION`. Das ist keine Regression: das Ticket hat `DEFINITION` nie verlassen.
 
-Codes prüfen: bei `READY` müssen alle drei Codes `200` sein; bei `DEFINITION_AI` müssen beide der zwei Aufrufe `200` sein. Jeder Fehlschlag → Fehler ausgeben, **beenden**, nicht als „zurückgegeben" melden.
+Codes prüfen: bei `READY` müssen alle drei Codes `200` sein; bei `DEFINITION_AI` und bei `DEFINITION_READY` müssen beide der zwei Aufrufe `200` sein. Jeder Fehlschlag → Fehler ausgeben, **beenden**, nicht als „zurückgegeben" melden.
 
-Waren alle nötigen Codes `200`: **beenden**. Das Ticket landet in der Definition-Spalte bei `owner=HUMAN`. Bei `READY` war es nie `IN_PROGRESS`. Bei `DEFINITION_AI` hat es die Spalte gar nicht verlassen.
+Waren alle nötigen Codes `200`: **beenden**. Das Ticket landet in der Definition-Spalte bei `owner=HUMAN`. Bei `READY` war es nie `IN_PROGRESS`. Bei `DEFINITION_AI` hat es die Spalte gar nicht verlassen. Bei `DEFINITION_READY` ebenfalls nicht — `owner` steht auf `HUMAN` (siehe Punkt 2 oben), und `fullyReady` steht jetzt auf `false`.
 
 Generische Kommentare wie „unklar" sind nicht akzeptabel. Den fehlenden Punkt konkret benennen.
 
-## Schritt 3b — Befördern (nur Definition+AI) und Bauen (gut genug)
+## Schritt 3b — Befördern (Definition+AI oder Definition+fullyReady) und Bauen (gut genug)
 
 1. **Nur wenn `ticket_class == DEFINITION_AI`:** vor der Beförderung erneut laden. Das verkleinert — schließt aber nicht — das TOCTOU-Zeitfenster: zwischen Schritt 1 und hier vergehen durch den Thread-Read und den vollständigen `requirements-reviewer`-Aufruf oft zehn oder mehr Sekunden, in denen ein anderer Lauf dasselbe Ticket verändern könnte.
 
@@ -212,14 +224,57 @@ Generische Kommentare wie „unklar" sind nicht akzeptabel. Den fehlenden Punkt 
 
      **Wichtig, load-bearing:** `owner` ist an dieser Stelle bereits `AI` — geprüft in Schritt 1 und gerade eben erneut per Re-Fetch bestätigt. `PATCH /:id/status` selbst erzwingt **nichts** — kein Status-Guard, kein Owner-Guard, keine serverseitige Verteidigung dahinter. Schritt 1s (und dieses Re-Fetches) `owner=="AI"`-Prüfung ist die **einzige** Absicherung, die verhindert, dass ein noch menschen-eigenes Ticket befördert wird. Diese Prüfung beim späteren Bearbeiten dieses Skills **nicht entfernen**.
 
-     - HTTP `200` → Ticket ist jetzt `TODO`+`owner=AI`. Weiter mit Punkt 2 unten.
+     - HTTP `200` → Ticket ist jetzt `TODO`+`owner=AI`. Weiter mit Punkt 3 unten.
      - Jeder andere Code → Fehler ausgeben und **beenden**. Ticket bleibt `DEFINITION`, kein Claim-Versuch.
 
    - Sonst (Status oder Owner hat sich seit Schritt 1 geändert — z. B. nicht mehr `DEFINITION`, oder `owner` nicht mehr `AI`) → sauber **beenden**, kein Fehler ausgeben. Ein anderer Prozess oder ein Mensch hat das Ticket in der Zwischenzeit bereits bewegt.
 
-   **Für `ticket_class == READY` startet der Ablauf direkt bei Punkt 2** — kein Beförderungsschritt nötig, das Ticket ist schon `TODO`.
+2. **Nur wenn `ticket_class == DEFINITION_READY`:** vor der Beförderung erneut laden — dieselbe TOCTOU-Begründung wie bei Punkt 1.
 
-2. Ticket claimen (beide Klassen konvergieren hier, identisch zu `do-semi-automatic`):
+   ```bash
+   curl -s -w '\n%{http_code}' \
+     -H "Authorization: Bearer $AGENT_API_TOKEN" \
+     "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>"
+   ```
+
+   - Ticket ist weiterhin `DEFINITION` **und** `fullyReady==true` → befördern. Das Gate prüft `status` und `fullyReady` — **nicht** `owner`. `owner` prüft hier **nichts**: bei dieser Klasse war er bei der Klassifizierung in Schritt 1 wegen der Vorrang-Regel dort `HUMAN` und deshalb kein aussagekräftiges Kriterium — unabhängig davon, ob er sich bis zu diesem Re-Fetch geändert hat.
+
+     Genau zwei Beförderungsaufrufe, in **zwingender Reihenfolge**.
+
+     **Zuerst** Status auf `TODO` setzen:
+
+     ```bash
+     PROMOTE_STATUS_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH \
+       -H "Authorization: Bearer $AGENT_API_TOKEN" \
+       -H "Content-Type: application/json" \
+       -d '{"status": "TODO"}' \
+       "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>/status")
+     ```
+
+     - Nicht `200` → Fehler ausgeben und **beenden**. Ticket bleibt unverändert `DEFINITION` — sicher, kein Teilzustand. (`owner` war bei der Klassifizierung in Schritt 1 `HUMAN`; das Gate prüft ihn hier bewusst nicht erneut.)
+
+     **Danach, nur wenn dieser Aufruf `200` lieferte**, Owner auf `AI` setzen:
+
+     ```bash
+     PROMOTE_OWNER_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH \
+       -H "Authorization: Bearer $AGENT_API_TOKEN" \
+       -H "Content-Type: application/json" \
+       -d '{"owner": "AI"}' \
+       "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>/owner")
+     ```
+
+     - HTTP `200` → Ticket ist jetzt `TODO`+`owner=AI`. Weiter mit Punkt 3 unten.
+     - Jeder andere Code → **Teilfehler, explizit behandeln:** der Status-Aufruf war bereits erfolgreich, der Owner-Aufruf nicht. Das Ticket bleibt bei `TODO`+`owner=HUMAN` hängen — von keiner der drei Klassen mehr claimbar, und auch `/start` weist es zurück (kein `owner=AI`). Fehler ausgeben, **beenden**, manuelle Reparatur nötig. Diesen Lauf **niemals** als gebaut oder erfolgreich melden.
+
+     **Wichtig, load-bearing:** Diese Reihenfolge — erst `status`, dann `owner` — ist zwingend und darf beim späteren Bearbeiten dieses Skills **nicht vertauscht oder entfernt** werden. Status-zuerst ist sicher: der Zwischenzustand `TODO`+`owner=HUMAN` passt zu keiner der drei Scan-Klassen aus Schritt 1, ein gleichzeitiger Lauf greift ihn nicht auf. Owner-zuerst ist verboten: der Zwischenzustand `DEFINITION`+`owner=AI` sieht für einen gleichzeitigen Lauf wie ein echtes DEFINITION_AI-Ticket aus — er würde es mitten in der Beförderung greifen und doppelt bearbeiten.
+
+     Gleiches akzeptiertes Restrisiko wie bei DEFINITION_AI: `PATCH /:id/status` und `PATCH /:id/owner` erzwingen serverseitig nichts — kein Status-Guard, kein Owner-Guard. Nicht neu und nicht schlimmer, schützt hier aber eine Zwei-Aufruf-Sequenz statt eines einzelnen Aufrufs.
+
+   - Sonst (Status oder `fullyReady` hat sich seit Schritt 1 geändert) → sauber **beenden**, kein Fehler ausgeben. Ein anderer Prozess oder ein Mensch hat das Ticket in der Zwischenzeit bereits bewegt.
+
+**Für `ticket_class == READY` startet der Ablauf direkt bei Punkt 3** — kein Beförderungsschritt nötig, das Ticket ist schon `TODO`.
+
+3. Ticket claimen (alle drei Klassen konvergieren hier, identisch zu `do-semi-automatic`):
 
    ```bash
    START_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
@@ -227,11 +282,11 @@ Generische Kommentare wie „unklar" sind nicht akzeptabel. Den fehlenden Punkt 
      "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>/start")
    ```
 
-   - HTTP `200` → Ticket ist jetzt `IN_PROGRESS`. Weiter mit Punkt 3 unten.
-   - HTTP `409` → jemand/etwas anderes hat es beansprucht, oder es ist nicht mehr `TODO`+`AI`. Bei `DEFINITION_AI` bedeutet das: das TOCTOU-Zeitfenster aus Punkt 1 hat sich materialisiert — die Beförderung ist bereits erfolgt, das Ticket bleibt `TODO`+`owner=AI`, aber unclaimed (dokumentiertes Restrisiko für Einzelläufer-Betrieb). Fehler ausgeben und **beenden**.
+   - HTTP `200` → Ticket ist jetzt `IN_PROGRESS`. Weiter mit Punkt 4 unten.
+   - HTTP `409` → jemand/etwas anderes hat es beansprucht, oder es ist nicht mehr `TODO`+`AI`. Bei `DEFINITION_AI` und `DEFINITION_READY` bedeutet das: das TOCTOU-Zeitfenster aus Punkt 1 bzw. 2 hat sich materialisiert — die Beförderung ist bereits erfolgt, das Ticket bleibt `TODO`+`owner=AI`, aber unclaimed (dokumentiertes Restrisiko für Einzelläufer-Betrieb). Fehler ausgeben und **beenden**.
    - Jeder andere Code → Fehler ausgeben und **beenden**.
 
-3. Statuswechsel dokumentieren (`/start` kennt kein Kommentarfeld):
+4. Statuswechsel dokumentieren (`/start` kennt kein Kommentarfeld):
 
    ```bash
    COMMENT_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
@@ -241,9 +296,9 @@ Generische Kommentare wie „unklar" sind nicht akzeptabel. Den fehlenden Punkt 
      "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>/comments")
    ```
 
-   HTTP-Code prüfen (siehe „Fehlerbehandlung bei mutierenden Aufrufen" oben). Nicht-2xx → Fehler ausgeben und **beenden**, `plan-and-do` NICHT aufrufen. Bei `DEFINITION_AI` erzählt dieser eine Kommentar Beförderung und Claim als eine Einheit — kein separater „befördert"-Kommentar davor.
+   HTTP-Code prüfen (siehe „Fehlerbehandlung bei mutierenden Aufrufen" oben). Nicht-2xx → Fehler ausgeben und **beenden**, `plan-and-do` NICHT aufrufen. Bei `DEFINITION_AI` und `DEFINITION_READY` erzählt dieser eine Kommentar Beförderung (bei `DEFINITION_READY`: die Zwei-Aufruf-Sequenz) und Claim als eine Einheit — kein separater „befördert"-Kommentar davor.
 
-4. `plan-and-do` via Skill-Tool aufrufen. Ticket-Titel + Body plus die gelösten Entscheidungen aus den `HUMAN`-Kommentaren als Beschreibung übergeben.
+5. `plan-and-do` via Skill-Tool aufrufen. Ticket-Titel + Body plus die gelösten Entscheidungen aus den `HUMAN`-Kommentaren als Beschreibung übergeben.
 
    **Ohne `Hinweis`** — Beschreibung wie bisher:
 
@@ -315,9 +370,9 @@ DONE_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
 
 Jede Statuswechsel-Entscheidung dieses Skills wird mit einem kleinen Ticket-Kommentar dokumentiert:
 
-- `→ DEFINITION` (Schritt 3a, beide Ticket-Klassen): eigener `POST /:id/comments`, da `/owner` und `/status` selbst kein Kommentarfeld kennen. Bei `DEFINITION_AI` ist dieser Kommentar die ganze Geschichte — kein Status-PATCH folgt, das Ticket war ja nie woanders.
-- `→ IN_PROGRESS` (Schritt 3b): eigener Kommentar „In Bearbeitung genommen...". Bei `DEFINITION_AI`-Tickets dokumentiert dieser Kommentar zugleich die vorangegangene Beförderung.
-- `→ ON_HOLD` (Schritt 3b-Blocker): der Kommentar kommt automatisch von `POST /:id/ask`. Unverändert — für beide Ticket-Klassen nur über Schritt 3b-Blocker erreichbar, nie über Schritt 3a.
+- `→ DEFINITION` (Schritt 3a, alle drei Ticket-Klassen): eigener `POST /:id/comments`, da `/owner` und `/status` selbst kein Kommentarfeld kennen. Bei `DEFINITION_AI` ist dieser Kommentar die ganze Geschichte — kein Status-PATCH folgt, das Ticket war ja nie woanders. Bei `DEFINITION_READY` trägt derselbe Kommentar-Aufruf zusätzlich `"clearFullyReady": true`.
+- `→ IN_PROGRESS` (Schritt 3b): eigener Kommentar „In Bearbeitung genommen...". Bei `DEFINITION_AI`-Tickets dokumentiert dieser Kommentar zugleich die vorangegangene Beförderung. Bei `DEFINITION_READY`-Tickets dokumentiert er die Zwei-Aufruf-Beförderung plus den Claim als eine Einheit.
+- `→ ON_HOLD` (Schritt 3b-Blocker): der Kommentar kommt automatisch von `POST /:id/ask`. Unverändert — für alle drei Ticket-Klassen nur über Schritt 3b-Blocker erreichbar, nie über Schritt 3a.
 - `→ DONE` (Schritt 4): der Kommentar kommt automatisch von `POST /:id/done`.
 
-> Anmerkung: Dieser Skill löst ein Ticket nie als „Won't Do" auf — das ist eine Aktion nur für Menschen. Seine einzigen Ergebnisse sind **erledigt** (Schritt 4), **zurück auf Definition** (Schritt 3a) oder **Blocked** (Schritt 3b-Blocker). „Zurück auf Definition" deckt jetzt zwei Fälle ab: ein READY-Ticket, das zurückfällt, oder ein Definition+AI-Ticket, das schlicht dort bleibt (abgelehnte Beförderung) — beide nutzen denselben Schritt-3a-Mechanismus.
+> Anmerkung: Dieser Skill löst ein Ticket nie als „Won't Do" auf — das ist eine Aktion nur für Menschen. Seine einzigen Ergebnisse sind **erledigt** (Schritt 4), **zurück auf Definition** (Schritt 3a) oder **Blocked** (Schritt 3b-Blocker). „Zurück auf Definition" deckt jetzt drei Fälle ab: ein READY-Ticket, das zurückfällt, ein Definition+AI-Ticket, das schlicht dort bleibt (abgelehnte Beförderung), oder ein Definition+fullyReady-Ticket, das ebenfalls dort bleibt, aber als einziges mit `fullyReady=false` endet — alle drei nutzen denselben Schritt-3a-Mechanismus.
