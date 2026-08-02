@@ -38,6 +38,7 @@ import {
   ensureTicketFullyReadyColumn,
   alterTicketAddFullyReadyColumn,
 } from '../config/migrate.js';
+import { TICKET_SEED_COUNT } from '../seed/ticketSeed.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -159,8 +160,18 @@ test.describe.serial('fullyReady migration — ensureTicketFullyReadyColumn / al
 
     // Raw-SQL level check, independent of any service-layer boolean
     // coercion (that's Task 4's responsibility, not this migration test).
+    //
+    // File-ordering assumption (mirrors the precedent in
+    // agentTaskSeed.spec.ts): this only proves "seeded rows read
+    // fullyReady = 0" because this spec file runs alphabetically before
+    // tickets.spec.ts — the only other spec file that creates
+    // fullyReady=true rows — so at this point the `ticket` table holds
+    // exactly the TICKET_SEED_COUNT seeded rows and nothing else. We assert
+    // the row count against TICKET_SEED_COUNT before checking values so a
+    // future ordering change (or an extra row from elsewhere) fails loudly
+    // here instead of this test silently passing on a different table shape.
     const rows = await client.execute('SELECT id, fullyReady FROM ticket');
-    expect(rows.rows.length).toBeGreaterThan(0);
+    expect(rows.rows.length).toBe(TICKET_SEED_COUNT);
     for (const row of rows.rows) {
       expect(row['fullyReady']).toBe(0);
     }

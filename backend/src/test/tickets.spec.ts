@@ -2606,6 +2606,11 @@ test.describe('POST /:id/comments — handBackToAi guard (only ON_HOLD+HUMAN all
 test.describe('fullyReady round-trip — boolean typing across read endpoints', () => {
   let admin: APIRequestContext;
   let agent: APIRequestContext;
+  // Populated by the "GET /:id" test below with a fullyReady:true ticket
+  // that lands DEFINITION+HUMAN on create (REQ-005). Reused by the "GET
+  // /board" test so it can assert an actual `true` value in the DEFINITION
+  // column, not just boolean typing.
+  let trueFixtureDefinitionId: number;
 
   test.beforeAll(async () => {
     admin = await loginCtx('admin', 'admin123');
@@ -2633,6 +2638,7 @@ test.describe('fullyReady round-trip — boolean typing across read endpoints', 
     });
     expect(createResp.status()).toBe(201);
     const created = await createResp.json() as Ticket;
+    trueFixtureDefinitionId = created.id;
 
     const trueResp = await admin.get(`/api/tickets/${created.id}`);
     expect(trueResp.status()).toBe(200);
@@ -2676,6 +2682,17 @@ test.describe('fullyReady round-trip — boolean typing across read endpoints', 
         }
       });
     }
+
+    // The `typeof === 'boolean'` checks above would still pass a mapper bug
+    // that hardcoded `fullyReady: false` everywhere. Pin an actual `true`
+    // value in the DEFINITION column: the "GET /:id" test earlier in this
+    // describe block already created a fullyReady:true ticket that lands
+    // DEFINITION+HUMAN on create (REQ-005), so it must be sitting there now.
+    await test.step('DEFINITION column contains the known fullyReady:true fixture', () => {
+      const fixture = body.DEFINITION.find((item) => item.id === trueFixtureDefinitionId);
+      expect(fixture).toBeDefined();
+      expect(fixture?.fullyReady).toBe(true);
+    });
   });
 
   test('GET /board TODO column and GET /next: true fixture reaches TODO+AI only via explicit status+owner promotion', async () => {
