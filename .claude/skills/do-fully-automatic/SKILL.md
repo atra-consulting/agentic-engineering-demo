@@ -33,8 +33,8 @@ Lies das Argument als `<erstes Token> [Rest…]`. Das **erste Token** (bis zum e
 
 Drei Eingabemodi, je nach erstem Token. In dieser Reihenfolge prüfen:
 
-1. **Leer** (kein Argument) → das nächste Ready+AI-Ticket suchen (Schritt 1, Board-Zweig). Kein `Hinweis` möglich — es gibt kein benanntes Ticket, an das er sich hängen könnte.
-2. **Reine Zahl** als erstes Token (z. B. `/do-fully-automatic 8` oder `/do-fully-automatic 8 bitte nur das Backend anfassen`) → Ticket-ID. Die „Nächstes Ticket finden"-Auswahl in Schritt 1 überspringen. Statt dessen das Ticket per ID laden und prüfen, ob es Ready+AI ist (ID-Zweig unten). Der Rest nach dem ersten Token ist der optionale `Hinweis`.
+1. **Leer** (kein Argument) → das nächste Ticket suchen — zuerst Ready+AI, sonst Definition+AI (Schritt 1, Board-Zweig). Kein `Hinweis` möglich — es gibt kein benanntes Ticket, an das er sich hängen könnte.
+2. **Reine Zahl** als erstes Token (z. B. `/do-fully-automatic 8` oder `/do-fully-automatic 8 bitte nur das Backend anfassen`) → Ticket-ID. Die „Nächstes Ticket finden"-Auswahl in Schritt 1 überspringen. Statt dessen das Ticket per ID laden und prüfen, ob es Ready+AI oder Definition+AI ist (ID-Zweig unten). Der Rest nach dem ersten Token ist der optionale `Hinweis`.
 3. **Ticket-URL** als erstes Token (z. B. `/do-fully-automatic http://localhost:7200/admin/tickets/11` oder mit angehängtem `Hinweis`) → auch eine Ticket-ID. **Nur** wenn das erste Token eine URL ist — es beginnt mit `http://`, `https://`, `/admin/` oder `/api/`. Dann die Ziffern nach `tickets/` als ID herausziehen (`11`) und wie eine Ticket-ID behandeln. Das Muster `tickets/<Ziffern>` matcht sowohl die Admin-URL (`/admin/tickets/11`) als auch die API-URL (`/api/tickets/11`); ein Schrägstrich, ein `?` oder das Ende danach ist erlaubt. Enthält die URL kein `tickets/<Ziffern>` (z. B. `.../tickets/board` oder `.../tickets/next`) → Fehler ausgeben und **beenden**. Der Rest nach dem ersten Token ist der optionale `Hinweis`.
 
 Dieser Skill kennt **keinen** Freitext-Modus für das erste Token. Nur das **erste Token** muss reine Zahl oder URL sein — Text danach ist der optionale `Hinweis`, kein Fehler. Ist das erste Token weder reine Zahl noch URL (z. B. Prosa wie „Die Seite /admin/tickets/11 hängt", die mit einem Wort beginnt), ist das Argument ungültig → Fehler ausgeben und **beenden**.
@@ -200,7 +200,6 @@ Generische Kommentare wie „unklar" sind nicht akzeptabel. Den fehlenden Punkt 
      "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>"
    ```
 
-   - Ticket ist nicht mehr `DEFINITION` **und** `owner=="AI"` → sauber **beenden**, kein Fehler ausgeben. Ein anderer Prozess oder ein Mensch hat das Ticket in der Zwischenzeit bereits bewegt.
    - Ticket ist weiterhin `DEFINITION` **und** `owner=="AI"` → befördern:
 
      ```bash
@@ -215,6 +214,8 @@ Generische Kommentare wie „unklar" sind nicht akzeptabel. Den fehlenden Punkt 
 
      - HTTP `200` → Ticket ist jetzt `TODO`+`owner=AI`. Weiter mit Punkt 2 unten.
      - Jeder andere Code → Fehler ausgeben und **beenden**. Ticket bleibt `DEFINITION`, kein Claim-Versuch.
+
+   - Sonst (Status oder Owner hat sich seit Schritt 1 geändert — z. B. nicht mehr `DEFINITION`, oder `owner` nicht mehr `AI`) → sauber **beenden**, kein Fehler ausgeben. Ein anderer Prozess oder ein Mensch hat das Ticket in der Zwischenzeit bereits bewegt.
 
    **Für `ticket_class == READY` startet der Ablauf direkt bei Punkt 2** — kein Beförderungsschritt nötig, das Ticket ist schon `TODO`.
 
