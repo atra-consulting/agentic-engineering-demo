@@ -2,8 +2,8 @@
 name: "project:write-ticket"
 description: "Headless autonomous skill that claims one agent-task feedback item (or takes a task ID, a task URL, or free-floating feedback text), judges it, and files a new Kanban ticket (Definition, owner HUMAN) from it — commenting on the ticket to demand missing info when the feedback is too thin. Never builds, pushes, or opens a PR."
 argument-hint: "[task-id | task-url | feedback-text]"
-version: 1.4.0
-last-modified: 2026-07-08
+version: 1.5.0
+last-modified: 2026-08-02
 allowed-tools:
   - Read
   - Bash
@@ -162,15 +162,17 @@ Den `body` als Markdown-Vorlage mit vier Abschnitten aufbauen, in genau dieser R
 
 `type` und `title` wie bisher setzen.
 
+Für `fullyReady`: Setze auf `true` wenn das Urteil aus Schritt 2 „gut genug zum Bauen" ist, ansonsten `false` oder omit.
+
 ```bash
 curl -s -w '\n%{http_code}' -X POST \
   -H "Authorization: Bearer $AGENT_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"type": "<Typ aus Schritt 2, Default FEATURE>", "title": "<Titel aus dem Feedback>", "body": "<Markdown-Vorlage: #### Feedback, dann #### Fachlich (für Business), dann #### Technisch (für Entwickler), dann #### Akzeptanzkriterien>"}' \
+  -d '{"type": "<Typ aus Schritt 2, Default FEATURE>", "title": "<Titel aus dem Feedback>", "body": "<Markdown-Vorlage: #### Feedback, dann #### Fachlich (für Business), dann #### Technisch (für Entwickler), dann #### Akzeptanzkriterien>", "fullyReady": true}' \
   "${APP_BASE_URL:-http://localhost:7070}/api/tickets"
 ```
 
-**Wichtig:** Der komplette mehrteilige Body — alle vier Abschnitte, inklusive Zeilenumbrüche und Zitat-Markup (`>`) — muss vollständig als JSON-String escaped werden, bevor er in `-d` landet. Sonst ist das JSON ungültig.
+**Wichtig:** Der komplette mehrteilige Body — alle vier Abschnitte, inklusive Zeilenumbrüche und Zitat-Markup (`>`) — muss vollständig als JSON-String escaped werden, bevor er in `-d` landet. Sonst ist das JSON ungültig. `fullyReady` ist dagegen ein Raw JSON Boolean Literal — wird NICHT escaped, im Gegensatz zu `type`/`title`/`body`.
 
 Body und HTTP-Code separat aus der Ausgabe lesen (`body` = alles vor der letzten Zeile, `http_code` = letzte Zeile).
 
