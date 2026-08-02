@@ -19,11 +19,17 @@
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-Drizzle%20ORM-003b57.svg">
 </p>
 
+> **Erstmal hier starten:** Für die vollständige Installationsanleitung (Node.js, Claude Code, IDE) bitte **[docs/SETUP.md](docs/SETUP.md)** lesen.
+
+> **English?** See **[docs/welcome_EN.MD](docs/welcome_EN.MD)** for an English introduction.
+
+---
+
 ## Zwei Wege durch dieses Repo
 
 Dieses Repo dient zwei Zielgruppen:
 
-- **Konferenz-Zuhörer** wollen die Skills und Subagents in ihr eigenes Projekt holen. Hier sind die Folien: [Claude Code Gelernt JFS 2026.pdf](docs/Claude%20Code%20Gelernt%20JFS%202026.pdf) Start: [Skills & Subagents übernehmen](#für-konferenz-zuhörer-skills--subagents-übernehmen).
+- **Konferenz-Zuhörer** wollen die Skills und Subagents in ihr eigenes Projekt holen. Start: [Auf die `solution-jfs-2026`-Branch wechseln](https://github.com/atra-consulting/coding-with-ai-lab/blob/solution-jfs-2026/README.MD).
 - **Workshop-Teilnehmer** wollen Aufgaben in dieser App lösen. Start: [Aufgaben bearbeiten](#für-workshop-teilnehmer-aufgaben-bearbeiten).
 
 Der gemeinsame Teil (Schnellstart, Login, Tools) gilt für beide.
@@ -138,17 +144,16 @@ Details zu jedem Tool: **[docs/TOOLS.md](docs/TOOLS.md)**
 
 ## Für Konferenz-Zuhörer: Skills & Subagents übernehmen
 
-Du willst die Skills und Subagents in dein eigenes Projekt holen? Zwei Schritte.
+Du willst die Skills und Subagents aus diesem Repo in dein eigenes Projekt holen? So geht es.
 
-1. **Überfliegen, was es gibt.** [SKILLS.md](docs/SKILLS.md) (6 Skills), [SUBAGENTS.md](docs/SUBAGENTS.md) (24 Subagents), [TOOLS.md](docs/TOOLS.md) (die drei Demo-Tools).
-2. **Der Anleitung folgen.** **[TRANSFER.md](docs/TRANSFER.md)** führt dich Schritt für Schritt: kopieren, anpassen lassen, prüfen. Das ist der Kern — hier startest du.
+1. Lies, was es gibt: **[docs/SUBAGENTS.md](docs/SUBAGENTS.md)** (24 Subagents) und **[docs/SKILLS.md](docs/SKILLS.md)** (4 Skills).
+2. Folge der Anleitung: **[docs/TRANSFER.md](docs/TRANSFER.md)**. Kopieren, anpassen lassen, prüfen — Schritt für Schritt.
 
 | Dokument | Inhalt |
 |----------|--------|
-| **[docs/TRANSFER.md](docs/TRANSFER.md)** | **Die Anleitung. Übernahme in 8 Schritten.** |
-| [docs/SKILLS.md](docs/SKILLS.md) | Alle 6 Skills. Zweck, Argumente, Beispiele. |
 | [docs/SUBAGENTS.md](docs/SUBAGENTS.md) | Alle 24 Subagents. Zweck, Modell, Gruppen. |
-| [docs/TOOLS.md](docs/TOOLS.md) | Die drei Demo-Tools: Rechner, Agent-Tasks, Ticket-Board. |
+| [docs/SKILLS.md](docs/SKILLS.md) | Alle 4 Skills. Zweck, Argumente, Beispiele. |
+| [docs/TRANSFER.md](docs/TRANSFER.md) | Übernahme in dein Projekt. 8 Schritte. |
 
 ---
 
@@ -228,6 +233,8 @@ Playwright-MCP ermöglicht der AI, direkt mit der laufenden Anwendung im Browser
 
 Architektur-Details: **[docs/specs/SPECS.md](docs/specs/SPECS.md)**
 
+Konventionen und Patterns für AI-gestützte Entwicklung: **[AGENTS.md](AGENTS.md)**
+
 ---
 
 ## Weiterführende Dokumentation
@@ -239,10 +246,11 @@ Architektur-Details: **[docs/specs/SPECS.md](docs/specs/SPECS.md)**
 | [docs/welcome_DE.MD](docs/welcome_DE.MD) | Deutsche Workshop-Einführung |
 | [docs/welcome_EN.MD](docs/welcome_EN.MD) | English workshop introduction |
 | [docs/SUBAGENTS.md](docs/SUBAGENTS.md) | Alle 24 Subagents erklärt |
-| [docs/SKILLS.md](docs/SKILLS.md) | Alle 6 Custom-Skills erklärt |
+| [docs/SKILLS.md](docs/SKILLS.md) | Alle 4 Custom-Skills erklärt |
 | [docs/TRANSFER.md](docs/TRANSFER.md) | Skills & Subagents ins eigene Projekt übernehmen |
 | [docs/TOOLS.md](docs/TOOLS.md) | Produktivitäts-Rechner, Agent-Tasks, Ticket-Board |
-| [CLAUDE.md](CLAUDE.md) | Anweisungen und Konventionen für AI-Coding-Assistenten |
+| [AGENTS.md](AGENTS.md) | Anweisungen und Konventionen für AI-Coding-Assistenten (tool-neutral) |
+| [CLAUDE.md](CLAUDE.md) | Claude-Code-Spezifika (Subagents, Spec-Leselisten) — importiert `AGENTS.md` |
 | [docs/specs/SPECS.md](docs/specs/SPECS.md) | Detaillierte Spezifikationen pro Bereich |
 | [docs/adr/](docs/adr/) | Architecture Decision Records |
 | [docs/prds/](docs/prds/) | Product Requirement Documents |
@@ -257,7 +265,8 @@ Architektur-Details: **[docs/specs/SPECS.md](docs/specs/SPECS.md)**
 ├── docs/             Installationsanleitung, Architektur, Specs, ADRs, PRDs, Tasks
 ├── start.sh          Startskript (macOS/Linux)
 ├── start.bat         Startskript (Windows)
-└── CLAUDE.md         Anweisungen für AI-Coding-Assistenten
+├── AGENTS.md         Anweisungen für AI-Coding-Assistenten (tool-neutral)
+└── CLAUDE.md         Claude-Code-Spezifika (importiert AGENTS.md)
 ```
 
 ---

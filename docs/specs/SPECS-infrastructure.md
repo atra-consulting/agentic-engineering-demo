@@ -54,11 +54,9 @@ coding-with-ai-lab/
 │       └── layout/             # Navbar, sidebar
 ├── .github/
 │   └── workflows/
-│       ├── deploy.yml                 # Test + deploy to Vercel on push to main
-│       ├── agent-task-runner.yml      # Autonomous agent for OPEN agent_task rows
-│       ├── do-factory-automatic.yml   # /do-factory-automatic skill — one agent_task per run, opens a PR
-│       ├── do-semi-automatic.yml      # /do-semi-automatic skill — one Kanban ticket per run, opens a PR
-│       └── github-issue-agent.yml     # GitHub-issue refinement agent
+│       ├── deploy.yml              # Test + deploy to Vercel on push to main
+│       ├── agent-task-runner.yml   # Autonomous agent for OPEN agent_task rows
+│       └── github-issue-agent.yml  # GitHub-issue refinement agent
 ├── docs/
 │   ├── adr/                    # Architecture Decision Records
 │   ├── prds/                   # Product Requirement Documents
@@ -69,7 +67,8 @@ coding-with-ai-lab/
 │   ├── agents/                 # Claude agents
 │   └── skills/                 # Claude skills
 ├── start.sh                    # Full-stack launcher
-├── CLAUDE.md                   # AI coding instructions
+├── AGENTS.md                   # AI coding instructions (tool-neutral)
+├── CLAUDE.md                   # Claude Code specifics (imports AGENTS.md)
 └── README.MD                   # Project overview
 ```
 
@@ -133,7 +132,6 @@ Dev dependencies:
 
 - Engine: SQLite/libSQL via `@libsql/client`
 - Local file path: `backend/data/crmdb.sqlite` (created automatically on first startup)
-- Test file path: `backend/data/crmdb.test.sqlite` — used when `NODE_ENV=test` (backend Playwright suite), so tests never touch the dev DB. Both files are git-ignored.
 - Remote: Turso cloud database when `TURSO_DATABASE_URL` is set (used on Vercel)
 
 Schema file paths, migration approach, table definitions, column specs, and enums: see [SPECS-database.md](SPECS-database.md).
@@ -232,14 +230,12 @@ No JWT secrets. No RSA key paths. No cookie-flag overrides.
 
 ## CI/CD
 
-Five GitHub Actions workflows in `.github/workflows/`:
+Three GitHub Actions workflows in `.github/workflows/`:
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | `deploy.yml` | Push to `main` (after tests pass) | Runs backend type-check + Playwright tests, frontend unit tests + build, then deploys to Vercel (production) |
 | `agent-task-runner.yml` | `repository_dispatch` event `solve-agent-tasks` | Runs the autonomous agent against OPEN `agent_task` rows |
-| `do-factory-automatic.yml` | `repository_dispatch` event `solve-agent-tasks`; also `workflow_dispatch`, daily `schedule` | Runs the `/do-factory-automatic` skill against one OPEN `agent_task`; pushes a branch and opens a PR (never merges) |
-| `do-semi-automatic.yml` | `repository_dispatch` event `solve-tickets` (dormant — no cron dispatches it yet); also `workflow_dispatch`, daily `schedule` | Runs the `/do-semi-automatic` skill against one Ready+AI Kanban ticket; pushes a branch and opens a PR (never merges) |
 | `github-issue-agent.yml` | `repository_dispatch` event `solve-github-issues` | Runs the GitHub-issue refinement agent against one labelled issue |
 
 ### Vercel Deployment
