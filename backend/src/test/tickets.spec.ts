@@ -16,6 +16,12 @@
  *   GET  /api/tickets/board           — five-column board with commentCount (incl. DEFINITION)
  *   GET  /api/tickets/summary         — counts by status/type/owner/solution (incl. DEFINITION)
  *   POST /api/tickets/reset           — deletes and reseeds 12 tickets
+ *   fullyReady (create) / clearFullyReady (comments) — ADD-FULLY-READY-FLAG:
+ *     boolean create default/passthrough/validation, boolean round-trip typing
+ *     across all read endpoints, clearFullyReady clear/no-op/idempotent,
+ *     atomicity with handBackToAi, untouched by all 7 non-write endpoints.
+ *     Migration tests for the underlying column live in
+ *     ticketFullyReadyMigration.spec.ts, not here.
  *
  * Authorization matrix:
  *   - Agent-token-or-admin endpoints (/:id/start, /:id/done, /:id/ask, create,
@@ -70,6 +76,7 @@ interface Ticket {
   body: string;
   status: string;
   solution: string | null;
+  fullyReady: boolean;
   pickedUpAt: string | null;
   resolvedAt: string | null;
   createdAt: string;
@@ -84,6 +91,7 @@ interface TicketListItem {
   title: string;
   status: string;
   solution: string | null;
+  fullyReady: boolean;
   commentCount: number;
 }
 
@@ -151,6 +159,16 @@ async function resetTickets(admin: APIRequestContext): Promise<void> {
     throw new Error(`POST /api/tickets/reset failed: ${resp.status()} ${await resp.text()}`);
   }
 }
+
+// ─── Shared fixture: fullyReady:true ticket for cross-suite reuse ────────────
+//
+// Set by the "create with fullyReady: true" test in the POST /api/tickets
+// suite below. The atomicity test in the "POST /:id/comments —
+// clearFullyReady flag" suite immediately after it reuses this exact ticket
+// id rather than creating a fresh one — see that test for why the fixture
+// must literally be the same row. No suite between the two calls
+// resetTickets(), so the row survives untouched until reused.
+let fullyReadyCreateFixtureId: number;
 
 // ─── Suite: Auth matrix — agent endpoints ────────────────────────────────────
 
@@ -1341,6 +1359,210 @@ test.describe('POST /api/tickets', () => {
     });
     expect(resp.status()).toBe(400);
   });
+
+  // ── fullyReady (REQ-004, REQ-005) ───────────────────────────────────────────
+
+  test('create without fullyReady → 201, defaults to false, boolean-typed', async () => {
+    const resp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'No fullyReady field', body: 'Defaults apply.' },
+    });
+    expect(resp.status()).toBe(201);
+    const body = await resp.json() as Ticket;
+
+    await test.step('fullyReady is false', () => { expect(body.fullyReady).toBe(false); });
+    await test.step('fullyReady is boolean-typed', () => { expect(typeof body.fullyReady).toBe('boolean'); });
+  });
+
+  test('create with fullyReady: true → 201, fullyReady true, DEFINITION+HUMAN, no side effects (REQ-005)', async () => {
+    const resp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'Fully ready ticket', body: 'Ready to build.', fullyReady: true },
+    });
+    expect(resp.status()).toBe(201);
+    const body = await resp.json() as Ticket;
+
+    await test.step('fullyReady is true', () => { expect(body.fullyReady).toBe(true); });
+    await test.step('status defaults to DEFINITION', () => { expect(body.status).toBe('DEFINITION'); });
+    await test.step('owner defaults to HUMAN', () => { expect(body.owner).toBe('HUMAN'); });
+    await test.step('comments is empty (no routing side effects)', () => {
+      expect(body.comments.length).toBe(0);
+    });
+
+    // Reused verbatim by the atomicity test in the next suite — see the
+    // "Shared fixture" comment above resetTickets()'s declaration.
+    fullyReadyCreateFixtureId = body.id;
+  });
+
+  test('create with non-boolean fullyReady ("yes") → 400 with fieldErrors.fullyReady', async () => {
+    const resp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'Bad fullyReady', body: 'Should fail validation.', fullyReady: 'yes' },
+    });
+    await test.step('status 400', () => { expect(resp.status()).toBe(400); });
+    const body = await resp.json() as ErrorBody;
+    await test.step('fieldErrors.fullyReady present', () => {
+      expect(typeof body.fieldErrors?.['fullyReady']).toBe('string');
+    });
+  });
+});
+
+// ─── Suite: POST /:id/comments — clearFullyReady flag ───────────────────────
+//
+// Deliberately runs immediately after the POST /api/tickets suite above and
+// never calls resetTickets() — every test here creates its own isolated
+// ticket via POST, except the atomicity test, which reuses
+// fullyReadyCreateFixtureId (set by the "create with fullyReady: true" test
+// above) unmodified. See that test for why literal reuse (not a fresh
+// fixture) matters.
+
+test.describe('POST /:id/comments — clearFullyReady flag', () => {
+  let admin: APIRequestContext;
+
+  test.beforeAll(async () => {
+    admin = await loginCtx('admin', 'admin123');
+  });
+
+  test.afterAll(async () => {
+    await admin.dispose();
+  });
+
+  test('clearFullyReady:true on a fullyReady:true ticket → clears the flag, stores HUMAN comment', async () => {
+    const createResp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'Clear flag ticket', body: 'Ready, will be cleared.', fullyReady: true },
+    });
+    expect(createResp.status()).toBe(201);
+    const created = await createResp.json() as Ticket;
+    expect(created.fullyReady).toBe(true);
+
+    const resp = await admin.post(`/api/tickets/${created.id}/comments`, {
+      data: { body: 'Reviewed, clearing the ready flag.', clearFullyReady: true },
+    });
+
+    await test.step('status 200', () => { expect(resp.status()).toBe(200); });
+    const body = await resp.json() as Ticket;
+    await test.step('fullyReady is false', () => { expect(body.fullyReady).toBe(false); });
+    await test.step('comment stored with author HUMAN', () => {
+      const comment = body.comments.find((c) => c.body === 'Reviewed, clearing the ready flag.');
+      expect(comment).toBeDefined();
+      expect(comment?.author).toBe('HUMAN');
+    });
+
+    // Side-effect: re-fetch and confirm persisted
+    const persisted = await (await admin.get(`/api/tickets/${created.id}`)).json() as Ticket;
+    await test.step('persisted fullyReady is false', () => { expect(persisted.fullyReady).toBe(false); });
+  });
+
+  test('comment without clearFullyReady leaves fullyReady unchanged (stays true)', async () => {
+    const createResp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'Untouched flag ticket', body: 'Ready, should stay ready.', fullyReady: true },
+    });
+    expect(createResp.status()).toBe(201);
+    const created = await createResp.json() as Ticket;
+    expect(created.fullyReady).toBe(true);
+
+    const resp = await admin.post(`/api/tickets/${created.id}/comments`, {
+      data: { body: 'Just a note, no flag change.' },
+    });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+    expect(body.fullyReady).toBe(true);
+  });
+
+  test('clearFullyReady:true sent twice in a row → 200 both times, fullyReady stays false (idempotent)', async () => {
+    const createResp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'Idempotent clear ticket', body: 'Ready.', fullyReady: true },
+    });
+    expect(createResp.status()).toBe(201);
+    const created = await createResp.json() as Ticket;
+    expect(created.fullyReady).toBe(true);
+
+    const first = await admin.post(`/api/tickets/${created.id}/comments`, {
+      data: { body: 'First clear.', clearFullyReady: true },
+    });
+    await test.step('first call 200', () => { expect(first.status()).toBe(200); });
+    const firstBody = await first.json() as Ticket;
+    await test.step('fullyReady false after first clear', () => { expect(firstBody.fullyReady).toBe(false); });
+
+    const second = await admin.post(`/api/tickets/${created.id}/comments`, {
+      data: { body: 'Second clear (already false).', clearFullyReady: true },
+    });
+    await test.step('second call 200', () => { expect(second.status()).toBe(200); });
+    const secondBody = await second.json() as Ticket;
+    await test.step('fullyReady still false after second clear', () => { expect(secondBody.fullyReady).toBe(false); });
+  });
+
+  test('clearFullyReady:true + handBackToAi:true on an ON_HOLD+HUMAN ticket (fullyReady:true fixture) → hand-back succeeds AND flag clears', async () => {
+    const createResp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'Hand-back + clear ticket', body: 'Ready, on hold.', fullyReady: true },
+    });
+    expect(createResp.status()).toBe(201);
+    const created = await createResp.json() as Ticket;
+
+    // Drive to ON_HOLD+HUMAN via admin drag-drop — PATCH /status never
+    // touches owner, so owner stays HUMAN (as set by create).
+    const holdResp = await admin.patch(`/api/tickets/${created.id}/status`, {
+      data: { status: 'ON_HOLD' },
+    });
+    expect(holdResp.status()).toBe(200);
+    const held = await holdResp.json() as Ticket;
+
+    await test.step('fixture is ON_HOLD+HUMAN before the call', () => {
+      expect(held.status).toBe('ON_HOLD');
+      expect(held.owner).toBe('HUMAN');
+    });
+    // Explicit precondition per plan: seeded ON_HOLD+HUMAN tickets default to
+    // fullyReady=false, which would make "clears too" trivially true even if
+    // the clear never ran. This fixture starts true, so the assertion below
+    // genuinely proves the clear happened.
+    await test.step('fixture fullyReady is true before the call', () => {
+      expect(held.fullyReady).toBe(true);
+    });
+
+    const resp = await admin.post(`/api/tickets/${created.id}/comments`, {
+      data: { body: 'Answering and handing back.', handBackToAi: true, clearFullyReady: true },
+    });
+
+    await test.step('status 200', () => { expect(resp.status()).toBe(200); });
+    const body = await resp.json() as Ticket;
+    await test.step('hand-back succeeded: status TODO', () => { expect(body.status).toBe('TODO'); });
+    await test.step('hand-back succeeded: owner AI', () => { expect(body.owner).toBe('AI'); });
+    await test.step('fullyReady cleared to false', () => { expect(body.fullyReady).toBe(false); });
+  });
+
+  test('both flags together on a ticket that is NOT ON_HOLD+HUMAN → 409, no comment stored, fullyReady stays true (atomicity)', async () => {
+    // Reuse the ticket created by the "create with fullyReady: true" test in
+    // the POST /api/tickets suite above — it lands DEFINITION+HUMAN with 0
+    // comments, already NOT ON_HOLD+HUMAN, and already fullyReady=true. Do
+    // not create a fresh fixture: the bug this test guards against
+    // (clearFullyReady leaking through the batch despite the handBackToAi
+    // guard throwing) can only ever flip true → false, never the reverse — a
+    // false-start "unchanged" fixture would pass even if the leak happens.
+    expect(fullyReadyCreateFixtureId).toBeDefined();
+
+    const before = await (await admin.get(`/api/tickets/${fullyReadyCreateFixtureId}`)).json() as Ticket;
+    await test.step('fixture precondition: DEFINITION+HUMAN', () => {
+      expect(before.status).toBe('DEFINITION');
+      expect(before.owner).toBe('HUMAN');
+    });
+    await test.step('fixture precondition: fullyReady true, 0 comments', () => {
+      expect(before.fullyReady).toBe(true);
+      expect(before.comments.length).toBe(0);
+    });
+
+    const resp = await admin.post(`/api/tickets/${fullyReadyCreateFixtureId}/comments`, {
+      data: { body: 'Should never land.', handBackToAi: true, clearFullyReady: true },
+    });
+
+    await test.step('status 409', () => { expect(resp.status()).toBe(409); });
+
+    const after = await (await admin.get(`/api/tickets/${fullyReadyCreateFixtureId}`)).json() as Ticket;
+    await test.step('no comment stored', () => { expect(after.comments.length).toBe(0); });
+    await test.step('fullyReady still true, unchanged by the failed batch', () => {
+      expect(after.fullyReady).toBe(true);
+    });
+    await test.step('status/owner also fully untouched', () => {
+      expect(after.status).toBe('DEFINITION');
+      expect(after.owner).toBe('HUMAN');
+    });
+  });
 });
 
 // ─── Suite: POST /api/tickets/:id/hand-to-ai ─────────────────────────────────
@@ -2376,5 +2598,276 @@ test.describe('POST /:id/comments — handBackToAi guard (only ON_HOLD+HUMAN all
       data: { body: 'Note on DONE ticket.' },
     });
     await test.step('plain comment on DONE → 200', () => { expect(resp2.status()).toBe(200); });
+  });
+});
+
+// ─── Suite: fullyReady round-trip — boolean typing across read endpoints ────
+
+test.describe('fullyReady round-trip — boolean typing across read endpoints', () => {
+  let admin: APIRequestContext;
+  let agent: APIRequestContext;
+
+  test.beforeAll(async () => {
+    admin = await loginCtx('admin', 'admin123');
+    await resetTickets(admin);
+    agent = await agentCtx();
+  });
+
+  test.afterAll(async () => {
+    await admin.dispose();
+    await agent.dispose();
+  });
+
+  test('GET /:id: fullyReady is a real boolean for both a true and a false fixture', async () => {
+    // Seeded ticket 1 (DEFINITION+HUMAN) defaults to fullyReady=false.
+    const falseResp = await admin.get('/api/tickets/1');
+    expect(falseResp.status()).toBe(200);
+    const falseTicket = await falseResp.json() as Ticket;
+    await test.step('seeded ticket fullyReady is false, boolean-typed', () => {
+      expect(falseTicket.fullyReady).toBe(false);
+      expect(typeof falseTicket.fullyReady).toBe('boolean');
+    });
+
+    const createResp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'GET :id true fixture', body: 'Ready.', fullyReady: true },
+    });
+    expect(createResp.status()).toBe(201);
+    const created = await createResp.json() as Ticket;
+
+    const trueResp = await admin.get(`/api/tickets/${created.id}`);
+    expect(trueResp.status()).toBe(200);
+    const trueTicket = await trueResp.json() as Ticket;
+    await test.step('created ticket fullyReady is true, boolean-typed', () => {
+      expect(trueTicket.fullyReady).toBe(true);
+      expect(typeof trueTicket.fullyReady).toBe('boolean');
+    });
+  });
+
+  test('GET / (paginated list): fullyReady is boolean-typed for every item, both true and false present', async () => {
+    const createResp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'List true fixture', body: 'Ready.', fullyReady: true },
+    });
+    expect(createResp.status()).toBe(201);
+
+    const resp = await admin.get('/api/tickets?size=100');
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as PageResult<TicketListItem>;
+
+    await test.step('every item has boolean-typed fullyReady', () => {
+      for (const item of body.content) {
+        expect(typeof item.fullyReady).toBe('boolean');
+      }
+    });
+    await test.step('at least one true item and one false item are present', () => {
+      expect(body.content.some((item) => item.fullyReady === true)).toBe(true);
+      expect(body.content.some((item) => item.fullyReady === false)).toBe(true);
+    });
+  });
+
+  test('GET /board: fullyReady is boolean-typed for every ticket in every column', async () => {
+    const resp = await admin.get('/api/tickets/board');
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as TicketBoard;
+
+    for (const column of ['DEFINITION', 'TODO', 'IN_PROGRESS', 'ON_HOLD', 'DONE'] as const) {
+      await test.step(`${column} column: every item has boolean-typed fullyReady`, () => {
+        for (const item of body[column]) {
+          expect(typeof item.fullyReady).toBe('boolean');
+        }
+      });
+    }
+  });
+
+  test('GET /board TODO column and GET /next: true fixture reaches TODO+AI only via explicit status+owner promotion', async () => {
+    // TODO+AI is the only state /next and the board's TODO column ever
+    // surface. A fullyReady:true ticket lands DEFINITION+HUMAN on create
+    // (REQ-005), so reaching TODO+AI requires an explicit two-step
+    // promotion — a false-only fixture is not enough to exercise this path.
+    const createResp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'TODO+AI true fixture', body: 'Ready, promoted.', fullyReady: true },
+    });
+    expect(createResp.status()).toBe(201);
+    const created = await createResp.json() as Ticket;
+    expect(created.status).toBe('DEFINITION');
+    expect(created.owner).toBe('HUMAN');
+    expect(created.fullyReady).toBe(true);
+
+    const statusResp = await admin.patch(`/api/tickets/${created.id}/status`, {
+      data: { status: 'TODO' },
+    });
+    expect(statusResp.status()).toBe(200);
+
+    const ownerResp = await admin.patch(`/api/tickets/${created.id}/owner`, {
+      data: { owner: 'AI' },
+    });
+    expect(ownerResp.status()).toBe(200);
+    const promoted = await ownerResp.json() as Ticket;
+    await test.step('promoted ticket is TODO+AI, fullyReady still true', () => {
+      expect(promoted.status).toBe('TODO');
+      expect(promoted.owner).toBe('AI');
+      expect(promoted.fullyReady).toBe(true);
+    });
+
+    // GET /board TODO column
+    const boardResp = await admin.get('/api/tickets/board');
+    expect(boardResp.status()).toBe(200);
+    const board = await boardResp.json() as TicketBoard;
+    const boardItem = board.TODO.find((t) => t.id === created.id);
+    await test.step('promoted ticket appears in board TODO column', () => {
+      expect(boardItem).toBeDefined();
+    });
+    await test.step('board TODO item fullyReady is true, boolean-typed', () => {
+      expect(boardItem?.fullyReady).toBe(true);
+      expect(typeof boardItem?.fullyReady).toBe('boolean');
+    });
+
+    // GET /next: drain until this specific ticket is claimed — other TODO+AI
+    // tickets (seeded, createdAt earlier) may be claimed first.
+    let claimed: Ticket | undefined;
+    for (let i = 0; i < 10 && !claimed; i++) {
+      const nextResp = await agent.get('/api/tickets/next');
+      if (nextResp.status() === 204) break;
+      const candidate = await nextResp.json() as Ticket;
+      // Every candidate drained along the way (seeded, fullyReady=false by
+      // default) also gets checked, giving this loop false-fixture coverage
+      // for /next too.
+      expect(typeof candidate.fullyReady).toBe('boolean');
+      if (candidate.id === created.id) claimed = candidate;
+    }
+
+    await test.step('the true-fixture ticket was claimable via /next', () => {
+      expect(claimed).toBeDefined();
+    });
+    await test.step('claimed ticket fullyReady is true, boolean-typed', () => {
+      expect(claimed?.fullyReady).toBe(true);
+      expect(typeof claimed?.fullyReady).toBe('boolean');
+    });
+  });
+});
+
+// ─── Suite: fullyReady untouched by non-write endpoints (REQ-007) ───────────
+//
+// Covers all 7 REQ-007 endpoints: /start, /done, /ask, /wont-do, /hand-to-ai,
+// PATCH /status, PATCH /owner. /wont-do and /hand-to-ai are admin-session-only
+// (requireAuth + requireRole('ADMIN')), a different auth path from the other
+// five (requireAgentTokenOrAdminSession) — both are included below, reusing
+// the same loginCtx('admin', 'admin123') helper used elsewhere in this file.
+// Every fixture starts fullyReady=true so a silent flip to false/0/1 would be
+// caught, not just "unchanged" from an already-false baseline.
+
+test.describe('fullyReady untouched by non-write endpoints', () => {
+  let admin: APIRequestContext;
+  let agent: APIRequestContext;
+
+  test.beforeAll(async () => {
+    admin = await loginCtx('admin', 'admin123');
+    agent = await agentCtx();
+  });
+
+  test.afterAll(async () => {
+    await admin.dispose();
+    await agent.dispose();
+  });
+
+  async function createFullyReadyTicket(title: string): Promise<Ticket> {
+    const resp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title, body: 'Ready ticket for untouched-by check.', fullyReady: true },
+    });
+    expect(resp.status()).toBe(201);
+    const ticket = await resp.json() as Ticket;
+    expect(ticket.fullyReady).toBe(true);
+    return ticket;
+  }
+
+  test('POST /:id/start leaves fullyReady unchanged and boolean-typed', async () => {
+    const created = await createFullyReadyTicket('start untouched');
+    // Promote to TODO+AI so /start's guard passes.
+    await admin.patch(`/api/tickets/${created.id}/status`, { data: { status: 'TODO' } });
+    await admin.patch(`/api/tickets/${created.id}/owner`, { data: { owner: 'AI' } });
+
+    const resp = await agent.post(`/api/tickets/${created.id}/start`, { data: {} });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+
+    await test.step('fullyReady unchanged (still true)', () => { expect(body.fullyReady).toBe(true); });
+    await test.step('fullyReady is boolean-typed', () => { expect(typeof body.fullyReady).toBe('boolean'); });
+  });
+
+  test('POST /:id/done leaves fullyReady unchanged and boolean-typed', async () => {
+    const created = await createFullyReadyTicket('done untouched');
+    await admin.patch(`/api/tickets/${created.id}/status`, { data: { status: 'TODO' } });
+    await admin.patch(`/api/tickets/${created.id}/owner`, { data: { owner: 'AI' } });
+    const startResp = await agent.post(`/api/tickets/${created.id}/start`, { data: {} });
+    expect(startResp.status()).toBe(200);
+
+    const resp = await agent.post(`/api/tickets/${created.id}/done`, { data: {} });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+
+    await test.step('fullyReady unchanged (still true)', () => { expect(body.fullyReady).toBe(true); });
+    await test.step('fullyReady is boolean-typed', () => { expect(typeof body.fullyReady).toBe('boolean'); });
+  });
+
+  test('POST /:id/ask leaves fullyReady unchanged and boolean-typed', async () => {
+    const created = await createFullyReadyTicket('ask untouched');
+    await admin.patch(`/api/tickets/${created.id}/status`, { data: { status: 'TODO' } });
+    await admin.patch(`/api/tickets/${created.id}/owner`, { data: { owner: 'AI' } });
+    const startResp = await agent.post(`/api/tickets/${created.id}/start`, { data: {} });
+    expect(startResp.status()).toBe(200);
+
+    const resp = await agent.post(`/api/tickets/${created.id}/ask`, {
+      data: { question: 'Untouched by ask?' },
+    });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+
+    await test.step('fullyReady unchanged (still true)', () => { expect(body.fullyReady).toBe(true); });
+    await test.step('fullyReady is boolean-typed', () => { expect(typeof body.fullyReady).toBe('boolean'); });
+  });
+
+  test('POST /:id/wont-do (admin-session-only) leaves fullyReady unchanged and boolean-typed', async () => {
+    const created = await createFullyReadyTicket('wont-do untouched');
+    // owner=HUMAN, status=DEFINITION (!= DONE) already satisfies the guard.
+
+    const resp = await admin.post(`/api/tickets/${created.id}/wont-do`, { data: {} });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+
+    await test.step('fullyReady unchanged (still true)', () => { expect(body.fullyReady).toBe(true); });
+    await test.step('fullyReady is boolean-typed', () => { expect(typeof body.fullyReady).toBe('boolean'); });
+  });
+
+  test('POST /:id/hand-to-ai (admin-session-only) leaves fullyReady unchanged and boolean-typed', async () => {
+    const created = await createFullyReadyTicket('hand-to-ai untouched');
+    // status=DEFINITION already satisfies the guard.
+
+    const resp = await admin.post(`/api/tickets/${created.id}/hand-to-ai`);
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+
+    await test.step('fullyReady unchanged (still true)', () => { expect(body.fullyReady).toBe(true); });
+    await test.step('fullyReady is boolean-typed', () => { expect(typeof body.fullyReady).toBe('boolean'); });
+  });
+
+  test('PATCH /:id/status leaves fullyReady unchanged and boolean-typed', async () => {
+    const created = await createFullyReadyTicket('status untouched');
+
+    const resp = await admin.patch(`/api/tickets/${created.id}/status`, { data: { status: 'TODO' } });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+
+    await test.step('fullyReady unchanged (still true)', () => { expect(body.fullyReady).toBe(true); });
+    await test.step('fullyReady is boolean-typed', () => { expect(typeof body.fullyReady).toBe('boolean'); });
+  });
+
+  test('PATCH /:id/owner leaves fullyReady unchanged and boolean-typed', async () => {
+    const created = await createFullyReadyTicket('owner untouched');
+
+    const resp = await admin.patch(`/api/tickets/${created.id}/owner`, { data: { owner: 'AI' } });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+
+    await test.step('fullyReady unchanged (still true)', () => { expect(body.fullyReady).toBe(true); });
+    await test.step('fullyReady is boolean-typed', () => { expect(typeof body.fullyReady).toBe('boolean'); });
   });
 });
