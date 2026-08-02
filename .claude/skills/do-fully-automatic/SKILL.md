@@ -2,7 +2,7 @@
 name: "project:do-fully-automatic"
 description: "Headless skill that works one Kanban ticket per run — Ready (TODO+AI), Definition+AI (assigned to the AI via 'An KI übergeben' but not yet promoted), or Definition+fullyReady (flagged automatically by write-ticket, not yet promoted). Judges it with requirements-reviewer: builds via plan-and-do (promoting a Definition+AI ticket to Ready itself first when ready, or promoting a Definition+fullyReady ticket via a mandatory two-call status-then-owner sequence), or sends it back to Definition (owner HUMAN) with a comment when not. An unsolvable problem during implementation still moves the ticket to Blocked, exactly like do-semi-automatic. No push, no PR. For headless claude -p runs."
 argument-hint: "[ticket-id | ticket-url] [comment]"
-version: 1.1.0
+version: 1.1.1
 last-modified: 2026-08-02
 allowed-tools:
   - Read
@@ -198,7 +198,7 @@ Der Reihe nach, jeweils mit dem Agent-Token. Nach jedem Aufruf den HTTP-Code pr�
 
 Codes prüfen: bei `READY` müssen alle drei Codes `200` sein; bei `DEFINITION_AI` und bei `DEFINITION_READY` müssen beide der zwei Aufrufe `200` sein. Jeder Fehlschlag → Fehler ausgeben, **beenden**, nicht als „zurückgegeben" melden.
 
-Waren alle nötigen Codes `200`: **beenden**. Das Ticket landet in der Definition-Spalte bei `owner=HUMAN`. Bei `READY` war es nie `IN_PROGRESS`. Bei `DEFINITION_AI` hat es die Spalte gar nicht verlassen. Bei `DEFINITION_READY` ebenfalls nicht — `owner=HUMAN` war ein No-op, und `fullyReady` steht jetzt auf `false`.
+Waren alle nötigen Codes `200`: **beenden**. Das Ticket landet in der Definition-Spalte bei `owner=HUMAN`. Bei `READY` war es nie `IN_PROGRESS`. Bei `DEFINITION_AI` hat es die Spalte gar nicht verlassen. Bei `DEFINITION_READY` ebenfalls nicht — `owner` steht auf `HUMAN` (siehe Punkt 2 oben), und `fullyReady` steht jetzt auf `false`.
 
 Generische Kommentare wie „unklar" sind nicht akzeptabel. Den fehlenden Punkt konkret benennen.
 
