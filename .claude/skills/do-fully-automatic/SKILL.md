@@ -22,7 +22,7 @@ API-Referenz: `docs/specs/SPEC-API-TICKETS.md` (Abschnitt „For skill authors")
 ## Konfiguration
 
 - API-Basis-URL: Umgebungsvariable `APP_BASE_URL`, sonst `http://localhost:7070`.
-- Auth-Header bei **jedem** API-Aufruf: `Authorization: Bearer $AGENT_API_TOKEN`. Lokal greift statt dessen der Loopback-Bypass (`AGENT_AUTH_ALLOW_LOOPBACK=1`), falls kein Header gesetzt ist — reiner Hintergrund-Kontext, dieser Skill sendet den Header immer, da Schritt 0 ohne gesetztes `AGENT_API_TOKEN` sofort abbricht. Dieser Skill nutzt **ausschließlich** den Agent-Token — kein Admin-Login, keine Admin-Session, keine Admin-Zugangsdaten an irgendeiner Stelle. Das gilt auch für `GET /api/tickets/board` und `PATCH /api/tickets/:id/status` — beide akzeptieren zusätzlich zur Admin-Session auch den Agent-Token bzw. den Loopback-Bypass.
+- Auth-Header bei **jedem** API-Aufruf: `Authorization: Bearer $AGENT_API_TOKEN`. Lokal greift statt dessen der Loopback-Bypass (`AGENT_AUTH_ALLOW_LOOPBACK=1`), falls kein Header gesetzt ist — reiner Hintergrund-Kontext, dieser Skill sendet den Header immer, da Schritt 0 ohne gesetztes `AGENT_API_TOKEN` sofort abbricht. Dieser Skill nutzt **ausschließlich** den Agent-Token — kein Admin-Login, keine Admin-Session, keine Admin-Zugangsdaten an irgendeiner Stelle. Das gilt auch für `GET /api/tickets/board`, `PATCH /api/tickets/:id/status` und `PATCH /api/tickets/:id/owner` — alle drei akzeptieren zusätzlich zur Admin-Session auch den Agent-Token bzw. den Loopback-Bypass.
 - Ein Ticket pro Durchlauf.
 
 ## Parameter
@@ -100,7 +100,7 @@ curl -s -w '\n%{http_code}' \
   "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>"
 ```
 
-- HTTP `200` → JSON parsen. `id`, `title`, `body` und das **`comments`**-Array behalten, `ticket_class` aus dem Board-Schritt beibehalten. Weiter zu Schritt 2.
+- HTTP `200` → JSON parsen. `id`, `title`, `body`, `fullyReady` und das **`comments`**-Array behalten, `ticket_class` aus dem Board-Schritt beibehalten. Weiter zu Schritt 2.
 - Jeder andere Code → Fehler ausgeben und **beenden**.
 
 **Wenn eine Ticket-ID als Parameter übergeben wurde**, statt dessen:
@@ -121,7 +121,7 @@ curl -s -w '\n%{http_code}' \
   - Alles andere → „Ticket <id>: status=<status>, owner=<owner>, fullyReady=<fullyReady> — Skill verarbeitet nur Bereit+KI, Definition+KI oder Definition+fullyReady Tickets. Durchlauf beendet." ausgeben und **beenden**.
 - Jeder andere Code → Fehler ausgeben und **beenden**.
 
-**Wenn eine Ticket-URL übergeben wurde**: die Ziffern nach `tickets/` als `<ID>` herausziehen und exakt den ID-Zweig oben ausführen (laden, `status`/`owner`-Prüfung). Kein eigener Ablauf.
+**Wenn eine Ticket-URL übergeben wurde**: die Ziffern nach `tickets/` als `<ID>` herausziehen und exakt den ID-Zweig oben ausführen (laden, `status`/`owner`/`fullyReady`-Prüfung). Kein eigener Ablauf.
 
 ## Schritt 2 — Thread lesen
 
@@ -174,7 +174,7 @@ Der Reihe nach, jeweils mit dem Agent-Token. Nach jedem Aufruf den HTTP-Code pr�
      "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>/comments")
    ```
 
-2. Owner auf `HUMAN` setzen (bei `ticket_class == DEFINITION_READY` ein No-op — `owner` ist wegen der Vorrang-Regel aus Schritt 1 bereits `HUMAN`; der Aufruf läuft trotzdem unverändert mit, derselbe Code-Pfad wie bei den anderen beiden Klassen):
+2. Owner auf `HUMAN` setzen (bei `ticket_class == DEFINITION_READY` in aller Regel ein No-op — `owner` war bei der Klassifizierung in Schritt 1 wegen der Vorrang-Regel dort `HUMAN`; hat sich das zwischenzeitlich geändert, setzt dieser Aufruf ihn trotzdem korrekt zurück. Der Aufruf läuft in jedem Fall unverändert mit, derselbe Code-Pfad wie bei den anderen beiden Klassen):
 
    ```bash
    OWNER_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH \
@@ -237,7 +237,7 @@ Generische Kommentare wie „unklar" sind nicht akzeptabel. Den fehlenden Punkt 
      "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>"
    ```
 
-   - Ticket ist weiterhin `DEFINITION` **und** `fullyReady==true` → befördern. Das Gate prüft `status` und `fullyReady` — **nicht** `owner`. `owner` prüft hier **nichts**: bei dieser Klasse ist er konstruktionsbedingt bereits `HUMAN` (siehe Vorrang-Regel in Schritt 1) und deshalb kein aussagekräftiges Kriterium.
+   - Ticket ist weiterhin `DEFINITION` **und** `fullyReady==true` → befördern. Das Gate prüft `status` und `fullyReady` — **nicht** `owner`. `owner` prüft hier **nichts**: bei dieser Klasse war er bei der Klassifizierung in Schritt 1 wegen der Vorrang-Regel dort `HUMAN` und deshalb kein aussagekräftiges Kriterium — unabhängig davon, ob er sich bis zu diesem Re-Fetch geändert hat.
 
      Genau zwei Beförderungsaufrufe, in **zwingender Reihenfolge**.
 
@@ -251,7 +251,7 @@ Generische Kommentare wie „unklar" sind nicht akzeptabel. Den fehlenden Punkt 
        "${APP_BASE_URL:-http://localhost:7070}/api/tickets/<id>/status")
      ```
 
-     - Nicht `200` → Fehler ausgeben und **beenden**. Ticket bleibt unverändert `DEFINITION`+`owner=HUMAN` — sicher, kein Teilzustand.
+     - Nicht `200` → Fehler ausgeben und **beenden**. Ticket bleibt unverändert `DEFINITION` — sicher, kein Teilzustand. (`owner` war bei der Klassifizierung in Schritt 1 `HUMAN`; das Gate prüft ihn hier bewusst nicht erneut.)
 
      **Danach, nur wenn dieser Aufruf `200` lieferte**, Owner auf `AI` setzen:
 
@@ -272,7 +272,7 @@ Generische Kommentare wie „unklar" sind nicht akzeptabel. Den fehlenden Punkt 
 
    - Sonst (Status oder `fullyReady` hat sich seit Schritt 1 geändert) → sauber **beenden**, kein Fehler ausgeben. Ein anderer Prozess oder ein Mensch hat das Ticket in der Zwischenzeit bereits bewegt.
 
-   **Für `ticket_class == READY` startet der Ablauf direkt bei Punkt 3** — kein Beförderungsschritt nötig, das Ticket ist schon `TODO`.
+**Für `ticket_class == READY` startet der Ablauf direkt bei Punkt 3** — kein Beförderungsschritt nötig, das Ticket ist schon `TODO`.
 
 3. Ticket claimen (alle drei Klassen konvergieren hier, identisch zu `do-semi-automatic`):
 
