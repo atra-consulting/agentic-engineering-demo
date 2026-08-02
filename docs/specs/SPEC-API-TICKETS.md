@@ -22,7 +22,7 @@ status:  DEFINITION ─(PATCH /:id/owner {AI})──▶ DEFINITION (owner→AI, 
 ```
 
 New tickets start in **`DEFINITION`** — the intake/refinement column (leftmost on the board, shown as "Definition"). A human refines the ticket via the comment thread, then routes it with one of two actions:
-- **"An KI übergeben"** — assign the ticket to the AI, but keep it in `DEFINITION` (`PATCH /:id/owner` with `owner=AI`). The AI now owns the refinement; the ticket is not yet ready to build.
+- **"An KI übergeben"** — assign the ticket to the AI, but keep it in `DEFINITION` (`PATCH /:id/owner` with `owner=AI`). The AI now owns the refinement; the ticket is not yet ready to build. A headless skill may judge it differently: `do-fully-automatic` claims `DEFINITION`+`owner=AI` tickets itself, and if the ticket is judged ready, promotes it to `TODO` and builds it without waiting for a human "Nach Bereit" click.
 - **"Nach Bereit"** — assign to the AI **and** move it to `TODO` (`POST /:id/hand-to-ai` → `owner=AI`, `status=TODO`). The ticket is now ready and claimable.
 
 Agents only ever claim `TODO`+`AI` tickets, so a `DEFINITION` ticket is never auto-claimed. The `TODO` column is labelled **"Bereit"** in the UI.

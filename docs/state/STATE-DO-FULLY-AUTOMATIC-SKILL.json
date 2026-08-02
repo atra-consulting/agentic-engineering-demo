@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "task_key": "DO-FULLY-AUTOMATIC-SKILL",
+  "status": "completed",
+  "current_step": "13.2",
+  "_note": "fullyReady zero-human-click extension explored and reviewed, deferred to a separate follow-up task; not part of this plan",
+  "started": "2026-08-02T00:00:00Z",
+  "updated": "2026-08-02T00:00:00Z",
+  "config": {
+    "input_mode": "freeform",
+    "user_description": "There's a .claude/skills/do-semi-automatic/SKILL.md. It needs manual approval of the plan/PRD. Make a do-fully-automatic skill that does not need such an approval: If the requirements in the ticket are clear, it creates a plan and implements it. But if the requirements are not clear, it falls back to 'Blocked' with a comment. And if there's an unsolvable problem during implementation, the ticket also moves back to blocked, just like do-semi-automatic does.",
+    "special_instructions": null,
+    "ticket_mode": false,
+    "ticket_id": null,
+    "ticket_url": null,
+    "ticket_api_base": null,
+    "ticket_claimed": false,
+    "branch_name": "do-fully-automatic-skill-create",
+    "original_branch": "main",
+    "original_head": "1489110fccb34025c83a72d755d7d590fbe70207",
+    "docs_folder": "docs",
+    "is_git_repo": true,
+    "workflow_scope": "implement-review",
+    "pr_prefix": null,
+    "pr_exists": false,
+    "pr_url": null
+  },
+  "discovery": {
+    "agents_available": true,
+    "writer_agents": ["ba-writer"],
+    "coding_agents": ["be-coder", "db-coder", "fe-coder", "ui-designer"],
+    "review_agents": ["ba-reviewer", "requirements-reviewer", "be-reviewer", "db-reviewer", "fe-reviewer", "ui-reviewer"],
+    "test_coding_agents": ["be-test-coder", "fe-test-coder"],
+    "test_review_agents": ["be-test-reviewer", "fe-test-reviewer"],
+    "test_runner_agents": ["be-test-runner", "fe-test-runner"],
+    "tooling_coding_agents": ["python-coder", "shell-coder", "skill-coder"],
+    "tooling_review_agents": ["python-reviewer", "shell-reviewer", "skill-reviewer"],
+    "test_command": "cd backend && npm test"
+  },
+  "artifacts": {
+    "prd_skipped": true,
+    "prd_file": null,
+    "plan_file": "docs/plans/PLAN-DO-FULLY-AUTOMATIC-SKILL.md"
+  },
+  "completed_steps": []
+}
