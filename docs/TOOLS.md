@@ -62,7 +62,7 @@ Ein Kanban-Board. Ein einfaches Ticketsystem für das Software-Factory-Training.
 - Der Agent arbeitet `AI`-Tickets. Er kann eine Frage stellen. Dann geht das Ticket zurück an den Menschen.
 - Menschen arbeiten den Rest. Per Drag-and-Drop verschiebst du Tickets zwischen den Spalten.
 
-**Skills dazu:** [`/do-semi-automatic`](SKILLS.md#do-semi-automatic--autonom-ein-ticket-pro-lauf) arbeitet ein `AI`-Ticket pro Lauf ab. [`/write-ticket`](SKILLS.md#write-ticket--feedback-in-ein-neues-ticket-triagieren) legt aus Feedback ein neues Ticket an.
+**Skills dazu:** [`/do-semi-automatic`](SKILLS.md#do-semi-automatic--autonom-ein-ticket-pro-lauf) arbeitet ein `AI`-Ticket pro Lauf ab. [`/do-fully-automatic`](SKILLS.md#do-fully-automatic--autonom-inklusive-beförderung-aus-definition) macht dasselbe, befördert aber zusätzlich Definition+KI-Tickets selbst nach „Bereit". [`/write-ticket`](SKILLS.md#write-ticket--feedback-in-ein-neues-ticket-triagieren) legt aus Feedback ein neues Ticket an.
 
 **Wozu?** Das Tool zeigt die Zusammenarbeit von Mensch und KI an Tickets.
 
