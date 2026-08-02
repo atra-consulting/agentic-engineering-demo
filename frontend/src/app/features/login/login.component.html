@@ -1,0 +1,46 @@
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="login-logo">
+        <img src="assets/images/atra_logo.svg" alt="atra.consulting Logo" />
+      </div>
+      <h2>CRM System</h2>
+      <p>Bitte Benutzer auswählen</p>
+    </div>
+
+    <div class="login-body">
+      @if (errorMessage()) {
+        <div class="alert alert-danger" role="alert">
+          {{ errorMessage() }}
+        </div>
+      }
+
+      <div class="user-cards">
+        @for (user of users; track user.benutzername) {
+          <button
+            class="user-card"
+            type="button"
+            (click)="loginAs(user)"
+            [disabled]="loadingUser() !== null"
+          >
+            <div class="user-card-header" [style.background-color]="user.color"></div>
+            <div class="user-card-body">
+              <div class="user-card-name">{{ user.displayName }}</div>
+              <div class="user-card-username text-muted">{{ user.benutzername }}</div>
+              <div class="user-card-footer">
+                <span class="badge" [style.background-color]="user.color">{{ user.rollen }}</span>
+                @if (loadingUser() === user.benutzername) {
+                  <span class="spinner-border spinner-border-sm ms-2" role="status"><span class="visually-hidden">Laden...</span></span>
+                }
+              </div>
+            </div>
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="login-footer">
+      Made by <a href="https://atra.consulting/" target="_blank" rel="noopener noreferrer">atra.consulting</a>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,58 @@
+<nav class="sidebar d-flex flex-column" aria-label="Hauptnavigation">
+  @for (section of sections; track $index) {
+    @if (visibleItems(section.items).length > 0) {
+      @if (section.title && !layoutService.collapsed()) {
+        <div class="nav-section-header">{{ section.title }}</div>
+      }
+      <ul class="nav flex-column" [class.mt-3]="!$first">
+        @for (item of section.items; track item.route) {
+          @if (!item.requiredRole || hasRole(item.requiredRole)) {
+            <li class="nav-item">
+              <a class="nav-link" [routerLink]="item.route" routerLinkActive="active" [title]="layoutService.collapsed() ? item.label : ''">
+                <fa-icon [icon]="item.icon"></fa-icon>
+                @if (!layoutService.collapsed()) {
+                  {{ item.label }}
+                }
+              </a>
+            </li>
+          }
+        }
+      </ul>
+    }
+  }
+
+  <ul class="nav flex-column mt-auto">
+    @for (item of bottomItems; track item.route) {
+      <li class="nav-item">
+        <a class="nav-link" [routerLink]="item.route" routerLinkActive="active" [title]="layoutService.collapsed() ? item.label : ''">
+          <fa-icon [icon]="item.icon"></fa-icon>
+          @if (!layoutService.collapsed()) {
+            {{ item.label }}
+          }
+        </a>
+      </li>
+    }
+  </ul>
+
+  <div class="sidebar-toggle-container d-flex justify-content-center p-2">
+    <button
+      class="btn btn-link toggle-btn"
+      (click)="layoutService.toggleSidebar()"
+      [title]="layoutService.collapsed() ? 'Expand' : 'Collapse'"
+      [attr.aria-label]="layoutService.collapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+    >
+      <fa-icon [icon]="layoutService.collapsed() ? faAngleDoubleRight : faAngleDoubleLeft"></fa-icon>
+      @if (!layoutService.collapsed()) {
+        <span class="ms-2">Collapse</span>
+      }
+    </button>
+  </div>
+
+  <div class="sidebar-footer">
+    @if (!layoutService.collapsed()) {
+      Made by <a href="https://atra.consulting/" target="_blank" rel="noopener noreferrer" class="footer-link">atra.consulting</a>
+    } @else {
+      <span class="footer-mini">atra</span>
+    }
+  </div>
+</nav>

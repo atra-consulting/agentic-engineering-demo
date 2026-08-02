@@ -1,0 +1,13 @@
+@if (isAuthenticated()) {
+  <app-navbar />
+  <app-notification />
+  <div class="d-flex" [class.sidebar-collapsed]="layoutService.collapsed()">
+    <app-sidebar />
+    <div class="main-content flex-grow-1">
+      <router-outlet />
+    </div>
+  </div>
+} @else {
+  <app-notification />
+  <router-outlet />
+}
