@@ -25,7 +25,7 @@ The DB driver is `@libsql/client` (libSQL/Turso), not better-sqlite3. The API is
 | TypeScript enum arrays and types | `backend/src/db/schema/enums.ts` |
 | Migration statements (DDL) | `backend/src/config/migrate.ts` |
 
-Migration approach: plain `CREATE TABLE IF NOT EXISTS` statements, with one exception — `ensureSzenarioAgileKiColumn()` runs a guarded, idempotent `ALTER TABLE szenario ADD COLUMN agileKiSteps ...` for databases created before that column existed. It checks `PRAGMA table_info(szenario)` first and swallows a "duplicate column" error (concurrent cold-start guard), so it is safe to run on every startup. This is the codebase's first real ALTER-on-an-existing-table migration; every other table still relies on `CREATE TABLE IF NOT EXISTS` only. Both run on every startup before CRM seed data is loaded. After DDL, `seedAgentTasks()` (`backend/src/seed/agentTaskSeed.ts`) inserts the 23 `agent_task` rows idempotently (INSERT OR IGNORE, fixed ids 1–23) — so agent tasks exist in every deployment including Vercel cold-starts.
+Migration approach: plain `CREATE TABLE IF NOT EXISTS` statements, with two exceptions — `ensureSzenarioAgileKiColumn()` runs a guarded, idempotent `ALTER TABLE szenario ADD COLUMN agileKiSteps ...` for databases created before that column existed, checking `PRAGMA table_info(szenario)` first and swallowing a "duplicate column" error (concurrent cold-start guard). `ensureTicketFullyReadyColumn()` does the same for `ALTER TABLE ticket ADD COLUMN fullyReady ...`, checking `PRAGMA table_info(ticket)` first and swallowing a "duplicate column" error. Both are safe to run on every startup. These are the codebase's only two ALTER-on-an-existing-table migrations — `ensureSzenarioAgileKiColumn()` (adds `agileKiSteps` to `szenario`) and `ensureTicketFullyReadyColumn()` (adds `fullyReady` to `ticket`); every other table still relies on `CREATE TABLE IF NOT EXISTS` only. All migrations run on every startup before CRM seed data is loaded. After DDL, `seedAgentTasks()` (`backend/src/seed/agentTaskSeed.ts`) inserts the 23 `agent_task` rows idempotently (INSERT OR IGNORE, fixed ids 1–23) — so agent tasks exist in every deployment including Vercel cold-starts.
 
 ## Tables
 
@@ -44,6 +44,7 @@ Kanban work items with an owner and status lifecycle. Created by admins or seede
 | body | text | NOT NULL |
 | status | text | NOT NULL, default `DEFINITION` — `TICKET_STATUS` enum, DB `CHECK` constraint |
 | solution | text | nullable — `TICKET_SOLUTION` enum; set on `status=DONE` |
+| fullyReady | integer | NOT NULL, default `0` — stored as `0`/`1`, returned to clients as boolean |
 | pickedUpAt | text | nullable — ISO-8601, set when status → `IN_PROGRESS` |
 | resolvedAt | text | nullable — ISO-8601, set when status → `DONE` |
 | createdAt | text | NOT NULL, default `datetime('now')` |

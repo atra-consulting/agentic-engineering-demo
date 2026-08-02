@@ -21,11 +21,11 @@ status:  DEFINITION ─(PATCH /:id/owner {AI})──▶ DEFINITION (owner→AI, 
          (POST /reset)    deletes all data and re-seeds 12 workshop tickets
 ```
 
-New tickets start in **`DEFINITION`** — the intake/refinement column (leftmost on the board, shown as "Definition"). A human refines the ticket via the comment thread, then routes it with one of two actions:
+New tickets start in **`DEFINITION`** — the intake/refinement column (leftmost on the board, shown as "Definition"). A human refines the ticket via the comment thread, then either routes it with one of two actions, or — if `write-ticket` already flagged it `fullyReady=true` — `do-fully-automatic` routes it automatically, with no human action at all:
 - **"An KI übergeben"** — assign the ticket to the AI, but keep it in `DEFINITION` (`PATCH /:id/owner` with `owner=AI`). The AI now owns the refinement; the ticket is not yet ready to build. A headless skill may judge it differently: `do-fully-automatic` claims `DEFINITION`+`owner=AI` tickets itself, and if the ticket is judged ready, promotes it to `TODO` and builds it without waiting for a human "Nach Bereit" click.
 - **"Nach Bereit"** — assign to the AI **and** move it to `TODO` (`POST /:id/hand-to-ai` → `owner=AI`, `status=TODO`). The ticket is now ready and claimable.
 
-Agents only ever claim `TODO`+`AI` tickets, so a `DEFINITION` ticket is never auto-claimed. The `TODO` column is labelled **"Bereit"** in the UI.
+Agents do not only claim `TODO`+`AI` tickets: `do-fully-automatic` also claims a `DEFINITION` ticket directly, in two cases — `owner=AI` (a human clicked "An KI übergeben") or `fullyReady=true` (flagged automatically by `write-ticket`, no human click at all). The `TODO` column is labelled **"Bereit"** in the UI.
 
 ### Owner model and ask→answer→re-claim flow
 
@@ -44,6 +44,7 @@ Agents only ever claim `TODO`+`AI` tickets, so a `DEFINITION` ticket is never au
   "body": "…full text…",
   "status": "ON_HOLD",
   "solution": null,
+  "fullyReady": false,
   "pickedUpAt": null,
   "resolvedAt": null,
   "createdAt": "2026-06-21T10:00:00.000Z",
@@ -297,9 +298,9 @@ curl -s -X POST -H "Authorization: Bearer $AGENT_API_TOKEN" \
 ---
 
 ### POST `/api/tickets` — create (agent token · loopback · admin)
-**Auth:** agent token, loopback bypass, or admin session (first match wins). **Body:** `{ "type": "FEATURE"|"BUG"|"CHORE", "title": "<string>", "body": "<string>" }`.
+**Auth:** agent token, loopback bypass, or admin session (first match wins). **Body:** `{ "type": "FEATURE"|"BUG"|"CHORE", "title": "<string>", "body": "<string>", "fullyReady"?: <optional boolean> }`.
 
-Creates a ticket with `owner=HUMAN`, `status=DEFINITION` (lands in the intake column), no comments. A skill can call this with the agent token — no admin login needed.
+Creates a ticket with `owner=HUMAN`, `status=DEFINITION` (lands in the intake column), no comments. Optional `fullyReady` boolean (defaults to `false` when omitted) marks the ticket as ready for `do-fully-automatic` to claim directly without human review. A skill can call this with the agent token — no admin login needed.
 
 | Result | Meaning |
 |--------|---------|
@@ -392,9 +393,9 @@ curl -s -X POST -b "JSESSIONID=$SESSION" \
 ---
 
 ### POST `/api/tickets/:id/comments` — add comment (agent token · loopback · admin)
-**Auth:** agent token, loopback bypass, or admin session (first match wins). **Body:** `{ "body": "<non-empty string>", "handBackToAi": <optional boolean> }`.
+**Auth:** agent token, loopback bypass, or admin session (first match wins). **Body:** `{ "body": "<non-empty string>", "handBackToAi": <optional boolean>, "clearFullyReady": <optional boolean> }`.
 
-Inserts a comment. **The comment is always stored with `author=HUMAN`** — regardless of who calls it (there is no author field in the body). A skill posting here still writes a `HUMAN` comment. If `handBackToAi: true`, also sets `status=TODO`, `owner=AI`, clears `solution` and `resolvedAt` — returning the ticket to the AI queue. Guard: `handBackToAi` is only allowed when `status=ON_HOLD` and `owner=HUMAN`.
+Inserts a comment. **The comment is always stored with `author=HUMAN`** — regardless of who calls it (there is no author field in the body). A skill posting here still writes a `HUMAN` comment. If `handBackToAi: true`, also sets `status=TODO`, `owner=AI`, clears `solution` and `resolvedAt` — returning the ticket to the AI queue. If `clearFullyReady: true`, also sets `fullyReady=false`. Both flags are applied independently, but both are gated behind a shared guard: `handBackToAi` (if present) is only allowed when `status=ON_HOLD` and `owner=HUMAN`. If the guard fails, the entire request returns 409 — neither the comment is stored nor `clearFullyReady` applies.
 
 | Result | Meaning |
 |--------|---------|
@@ -537,9 +538,9 @@ X-Agent-Token: $AGENT_API_TOKEN
 | Step | Call | Notes |
 |------|------|-------|
 | Peek board | `GET /api/tickets/board` | Read all columns without claiming. Agent token or loopback bypass. |
-| Create | `POST /api/tickets` | Body `{ "type", "title", "body" }`. New ticket lands `DEFINITION` + `owner=HUMAN`. Use to file a triaged feedback item as an intake ticket. `201` on success. |
+| Create | `POST /api/tickets` | Body `{ "type", "title", "body", "fullyReady"?: boolean }`. New ticket lands `DEFINITION` + `owner=HUMAN`. Optional `fullyReady` marks the ticket ready for automatic promotion. Use to file a triaged feedback item as an intake ticket. `201` on success. |
 | Assign to AI | `PATCH /api/tickets/:id/owner` | Body `{ "owner": "AI" }`. Flips owner without changing status — "An KI übergeben" on a `DEFINITION` ticket. |
-| Comment | `POST /api/tickets/:id/comments` | Body `{ "body": string }`. Adds a comment (stored as `author=HUMAN`). Use to record what a thin ticket is missing. |
+| Comment | `POST /api/tickets/:id/comments` | Body `{ "body": string, "handBackToAi"?: boolean, "clearFullyReady"?: boolean }`. Adds a comment (stored as `author=HUMAN`). Optional `clearFullyReady` clears the `fullyReady` flag when true. Use to record what a thin ticket is missing. |
 | Set status | `PATCH /api/tickets/:id/status` | Body `{ "status" }`. Move to any column incl. `DEFINITION`. Sets/clears `solution` + `resolvedAt` on DONE transitions. |
 | Claim | `GET /api/tickets/next` | Optional `?type=FEATURE\|BUG\|CHORE`. Claims the oldest `TODO` ticket owned by `AI`, flips it to `IN_PROGRESS`. **`204` = queue empty, stop.** The response includes the full `comments` thread. |
 | Start | `POST /api/tickets/:id/start` | No body. From `TODO`+`owner=AI` → `IN_PROGRESS`. Use when you have the id but did not go through `/next`. Response includes full `comments` thread. |
