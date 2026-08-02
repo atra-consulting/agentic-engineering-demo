@@ -1,0 +1,9 @@
+{
+  "keepFiles": {
+    "prd": "ask",
+    "plan": "ask",
+    "review": "always",
+    "state": "ask"
+  },
+  "openMd": "never"
+}
