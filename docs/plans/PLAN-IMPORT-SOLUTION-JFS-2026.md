@@ -56,12 +56,12 @@
 - [ ] `cd backend && npm install && npm test` (Playwright API tests)
 - [ ] `cd frontend && npm install && npm test -- --watch=false` (Karma/Jasmine unit tests)
 - [ ] `cd frontend && npx ng build` (build sanity check)
-- [ ] Diff check: working tree matches `lab-source/main` exactly, aside from this task's own planning artifacts and `claude.bpf.json`
+- [ ] Diff check: working tree matches `lab-source/solution-jfs-2026` exactly except for the 4 upstream-merged files, aside from this task's own planning artifacts and `claude.bpf.json` — NOT `lab-source/main`, since the two branches are diverged siblings (93 vs. 5 unique commits) and their full trees differ far beyond the 4-file diff
 
 ## Tests
 
 ### Migration correctness (manual verification, not new test code)
-- [ ] `git diff lab-source/main -- . ':!docs/state' ':!docs/prds' ':!docs/plans' ':!docs/reviews' ':!claude.bpf.json'` shows no output — tree matches source `main` exactly
+- [ ] `git diff lab-source/solution-jfs-2026 -- . ':!docs/state' ':!docs/prds' ':!docs/plans' ':!docs/reviews' ':!claude.bpf.json'` shows changes in exactly the 4 upstream-merged files — nothing else
 - [ ] `coding-with-ai-lab` has no new branches/commits/pushes from this work (spot-check: `git ls-remote --heads https://github.com/atra-consulting/coding-with-ai-lab.git` unchanged)
 
 ### Pre-existing app test suites

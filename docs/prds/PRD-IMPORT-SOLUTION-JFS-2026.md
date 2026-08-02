@@ -54,7 +54,7 @@ No new tests are written for the import itself — this is a content-migration t
 
 ## Success Criteria
 
-- `coding-with-ai-demo`'s working tree matches `coding-with-ai-lab@main` exactly (`git diff` against a fresh clone of that ref shows no differences), except for this task's own planning artifacts (`docs/state/`, `docs/prds/`, `docs/plans/`, `docs/reviews/` entries for `IMPORT-SOLUTION-JFS-2026`, plus `claude.bpf.json`).
+- `coding-with-ai-demo`'s working tree matches `coding-with-ai-lab@solution-jfs-2026` exactly, except for the 4 files the upstream diff touches (`AGENTS.md` added, `CLAUDE.md`/`README.MD`/`docs/specs/SPECS-infrastructure.md` now matching `main`'s versions) and this task's own planning artifacts (`docs/state/`, `docs/prds/`, `docs/plans/`, `docs/reviews/` entries for `IMPORT-SOLUTION-JFS-2026`, plus `claude.bpf.json`). Note: `solution-jfs-2026` and `main` are diverged sibling branches (93 vs. 5 unique commits), so the result does NOT match `main`'s full tree — only those 4 files' content does.
 - Two clean commits in `coding-with-ai-demo`: one snapshot import, one upstream-diff merge.
 - `coding-with-ai-lab` has zero new branches, commits, or pushes from this work.
 - Backend and frontend test suites run (pass/fail reported; pre-existing failures in the source app are not this task's responsibility to fix).
