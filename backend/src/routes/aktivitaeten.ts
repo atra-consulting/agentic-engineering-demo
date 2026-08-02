@@ -1,0 +1,77 @@
+import { Router, Request, Response } from 'express';
+import { requireAuth } from '../middleware/auth.js';
+import { aktivitaetService } from '../services/aktivitaetService.js';
+import { parsePaginationParams, parseSort } from '../utils/pagination.js';
+import { validate, AktivitaetCreateSchema } from '../utils/validation.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+
+const router = Router();
+
+// GET /api/aktivitaeten/all
+router.get(
+  '/all',
+  requireAuth,
+  asyncHandler(async (_req: Request, res: Response) => {
+    res.json(await aktivitaetService.listAll());
+  }),
+);
+
+// GET /api/aktivitaeten — paginated, default sort datum desc
+router.get(
+  '/',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { page, size } = parsePaginationParams(req.query as Record<string, unknown>);
+    const sort = parseSort(
+      req.query['sort'] as string | string[] | undefined,
+      'datum',
+      'DESC',
+      'aktivitaet',
+    );
+    res.json(await aktivitaetService.findAll(page, size, sort));
+  }),
+);
+
+// GET /api/aktivitaeten/:id
+router.get(
+  '/:id',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = parseInt(req.params['id'] as string, 10);
+    res.json(await aktivitaetService.findById(id));
+  }),
+);
+
+// POST /api/aktivitaeten
+router.post(
+  '/',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const dto = validate(AktivitaetCreateSchema, req.body);
+    res.status(201).json(await aktivitaetService.create(dto));
+  }),
+);
+
+// PUT /api/aktivitaeten/:id
+router.put(
+  '/:id',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = parseInt(req.params['id'] as string, 10);
+    const dto = validate(AktivitaetCreateSchema, req.body);
+    res.json(await aktivitaetService.update(id, dto));
+  }),
+);
+
+// DELETE /api/aktivitaeten/:id
+router.delete(
+  '/:id',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = parseInt(req.params['id'] as string, 10);
+    await aktivitaetService.delete(id);
+    res.status(204).send();
+  }),
+);
+
+export default router;

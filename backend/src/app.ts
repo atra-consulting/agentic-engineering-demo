@@ -1,0 +1,59 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import express from 'express';
+import { corsMiddleware } from './middleware/cors.js';
+import { sessionMiddleware } from './middleware/session.js';
+import { errorHandler } from './middleware/errorHandler.js';
+import authRouter from './routes/auth.js';
+import firmenRouter from './routes/firmen.js';
+import personenRouter from './routes/personen.js';
+import abteilungenRouter from './routes/abteilungen.js';
+import adressenRouter from './routes/adressen.js';
+import aktivitaetenRouter from './routes/aktivitaeten.js';
+import chancenRouter from './routes/chancen.js';
+import dashboardRouter from './routes/dashboard.js';
+import agentTasksRouter from './routes/agentTasks.js';
+import ticketsRouter from './routes/tickets.js';
+import cronRouter from './routes/cron.js';
+import szenarienRouter from './routes/szenario.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const { version } = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8')) as { version: string };
+
+const app = express();
+
+// Trust the first proxy hop (Vercel edge) so that cookie.secure works correctly
+// in production. Without this, Express sees a plain-HTTP upstream connection and
+// suppresses Set-Cookie for secure cookies entirely.
+app.set('trust proxy', 1);
+
+// Middleware order matters: cors -> body parser -> session -> routes -> error handler
+
+app.use(corsMiddleware);
+app.use(express.json());
+app.use(sessionMiddleware);
+
+// Health check (public)
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), version });
+});
+
+// Routes
+app.use('/api/auth', authRouter);
+app.use('/api/firmen', firmenRouter);
+app.use('/api/personen', personenRouter);
+app.use('/api/abteilungen', abteilungenRouter);
+app.use('/api/adressen', adressenRouter);
+app.use('/api/aktivitaeten', aktivitaetenRouter);
+app.use('/api/chancen', chancenRouter);
+app.use('/api/dashboard', dashboardRouter);
+app.use('/api/agent-tasks', agentTasksRouter);
+app.use('/api/tickets', ticketsRouter);
+app.use('/api/cron', cronRouter);
+app.use('/api/szenarien', szenarienRouter);
+
+// Error handler MUST be last
+app.use(errorHandler);
+
+export default app;

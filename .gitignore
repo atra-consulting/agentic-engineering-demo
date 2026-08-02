@@ -1,0 +1,40 @@
+# Backend
+backend/target/
+backend/data/
+backend/test-results/
+*.class
+*.jar
+*.log
+
+# CIAM
+ciam/target/
+ciam/data/
+ciam/keys/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Screenshots
+/*.png
+/*.jpg
+
+# Playwright MCP
+.playwright-mcp/
+
+# Claude Code local settings
+.claude/settings.local.json
+.vercel
+
+# update-claude-files embedded result (regenerated every run, never committed)
+docs/state/UPDATE-CLAUDE-FILES-RESULT.md
