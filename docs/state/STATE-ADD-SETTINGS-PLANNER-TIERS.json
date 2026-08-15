@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "task_key": "ADD-SETTINGS-PLANNER-TIERS",
+  "status": "in_progress",
+  "current_step": "3.3",
+  "started": "2026-08-15T00:00:00.000Z",
+  "updated": "2026-08-15T00:00:00.000Z",
+  "config": {
+    "input_mode": "freeform",
+    "user_description": "Upgrade the plan-and-do skill with two features from /Users/karsten/Downloads/bpf-plan-and-do-upgrade/: (1) a claude.atra.json settings file controlling keep/delete of PRD/plan/review/state files and Markdown auto-open, (2) a planner agent plus explicit model-tier (haiku/sonnet/opus) delegation on every subagent dispatch, with verification and escalation.",
+    "special_instructions": "Settings file name must be claude.atra.json (not claude.bpf.json). Keep test-runner scoping simple (no paths-based scoping). Extend model tiers to test-authoring and tooling-agent dispatches too. Extract existing SKILL.md content into reference files as needed to stay at/under 850 lines.",
+    "ticket_mode": false,
+    "ticket_id": null,
+    "ticket_url": null,
+    "ticket_api_base": null,
+    "ticket_claimed": false,
+    "branch_name": "add-settings-planner-tiers",
+    "original_branch": "main",
+    "original_head": "c20c7517149af790fb15e6a99732d1518a9447a0",
+    "docs_folder": "docs",
+    "is_git_repo": true,
+    "workflow_scope": null,
+    "pr_prefix": null,
+    "pr_exists": false,
+    "pr_url": null
+  },
+  "discovery": {
+    "agents_available": false,
+    "writer_agents": [],
+    "coding_agents": [],
+    "review_agents": [],
+    "test_coding_agents": [],
+    "test_review_agents": [],
+    "test_runner_agents": [],
+    "tooling_coding_agents": [],
+    "tooling_review_agents": [],
+    "test_command": null
+  },
+  "artifacts": {
+    "prd_skipped": null,
+    "prd_file": null,
+    "plan_file": null
+  },
+  "completed_steps": []
+}
