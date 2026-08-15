@@ -1,0 +1,14 @@
+{
+  "planAndDo": {
+    "keepFiles": {
+      "prd": "always",
+      "plan": "always",
+      "review": "always",
+      "state": "never"
+    },
+    "openMd": "never"
+  },
+  "review": {
+    "remainingIssuesScope": "all"
+  }
+}
