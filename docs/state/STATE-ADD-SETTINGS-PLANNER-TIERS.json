@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_key": "ADD-SETTINGS-PLANNER-TIERS",
-  "status": "in_progress",
-  "current_step": "11.2",
+  "status": "completed",
+  "current_step": "13.2",
   "started": "2026-08-15T00:00:00.000Z",
   "updated": "2026-08-15T00:00:00.000Z",
   "config": {
