@@ -42,7 +42,7 @@ Two more rules:
 - The **orchestrator tier** is whatever model runs this skill. It is never a delegation target. You do not dispatch "to the orchestrator" — the orchestrator just does the work itself in the two cases from section 1.
 - **`fable` is never a worker.** Do not pass it as a `model` on any dispatch.
 
-**Test runners always run at `haiku`.** The only permitted `sonnet` dispatch in the test-execution path is a re-dispatch when a test report is ambiguous or self-contradictory.
+**`be-test-runner` and `fe-test-runner` always run at `haiku`.** The only permitted `sonnet` dispatch in the test-execution path is a re-dispatch when a test report is ambiguous or self-contradictory.
 
 ---
 
