@@ -105,4 +105,3 @@ Every task group gets both lines. That includes the standard "Test Implementatio
 Short and brief. Short sentences. Simple words non-native speakers understand. No passive voice. Sentence fragments are fine.
 
 No code samples in the plan beyond a signature or a file path. The plan says what to build, not how to type it.
-</content>

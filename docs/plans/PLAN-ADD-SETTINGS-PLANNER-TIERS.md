@@ -343,7 +343,7 @@ Serializes after task 19. This project has no automated tests for skill Markdown
 
 Serializes after task 20.
 
-- [ ] Walk `docs/prds/PRD-ADD-SETTINGS-PLANNER-TIERS.md` → `## Success Criteria` → "Feature 1" (14 lines). Report pass/fail per line with the file and section that proves it.
+- [ ] Walk `docs/prds/PRD-ADD-SETTINGS-PLANNER-TIERS.md` → `## Success Criteria` → "Feature 1" (15 lines). Report pass/fail per line with the file and section that proves it.
 - [ ] Walk the same PRD's "Feature 2" list (18 lines). Same reporting.
 - [ ] Walk the same PRD's "Both" list (6 lines). Same reporting.
 - [ ] Walk `/Users/karsten/Downloads/bpf-plan-and-do-upgrade/PROMPT.md` → `## Acceptance checklist`, all three blocks, line by line. Map its `claude.bpf.json` lines to `claude.atra.json` and its `/bpf-plan-and-do` lines to `/plan-and-do`. Report pass/fail per line.

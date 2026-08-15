@@ -68,7 +68,7 @@ Reference file for the plan-and-do skill. SKILL.md reads specific sections from 
 }
 ```
 
-`config.keep_settings` comes from Step 3.3 and is never null. `config.keep_files` stays null until Step 7.5b, then becomes an OBJECT of per-file booleans (e.g. `{ "plan": true, "state": false }`), never a single boolean.
+`config.keep_settings` comes from Step 3.3 and is never null. `config.keep_files` stays null until Step 7.5b, then becomes an OBJECT of per-file booleans (e.g. `{ "plan": true, "state": false }`), never a single boolean. `auto_open_md` is a literal `true`/`false` boolean, not a quoted string — the unquoted `[auto_open_md]` placeholder in the template above gets replaced with the literal boolean value.
 
 ### What goes in `delegation`
 
@@ -222,7 +222,7 @@ Update the state file with the resolved `config.keep_files`.
 
 ---
 
-## CLEANUP RESOLUTION (Step 13.0 and Step 13.2)
+## CLEANUP RESOLUTION (Step 13.0)
 
 ### Step 13.0: Cleanup Planning Files
 
@@ -244,16 +244,8 @@ git rm --ignore-unmatch [path-of-each-file-marked-false]
 rm -f [path-of-each-file-marked-false]
 git commit -m "docs: Remove planning files. [task_key]"
 ```
-`git rm --ignore-unmatch` covers tracked files; `rm -f` catches anything untracked. Skip the commit if nothing was marked for deletion.
+`git rm --ignore-unmatch` covers tracked files; `rm -f` catches anything untracked. Skip the commit if nothing was marked for deletion. In non-git mode, use plain `rm -f` — no `git rm`, no commit.
 
-**This commit skips the state file on purpose.** Even if `config.keep_files.state == false`, the state file must stay intact through Step 13.2 (status = completed). Step 13.2 removes it later.
+**This commit skips the state file on purpose.** Even if `config.keep_files.state == false`, the state file must stay intact through Step 13.2 (status = completed). Step 13.2 removes it later — see SKILL.md's own Step 13.2, which is fully self-contained and doesn't read this file.
 
 Display the full absolute file path of every file kept (PRD if it exists, plan, review — in that order).
-
-**Then, only after that commit:** if `config.keep_files.state == false`, delete the state file now (`git rm` for a tracked file, `rm -f` as a fallback) and commit: `docs: Remove state file. [task_key]`. Deleting it here — never earlier — guarantees the state file exists and stays valid all the way through completion.
-
-If `config.keep_files.state` is `true`, or missing, keep the state file. No action needed.
-
-Anything that runs after this deletion must not assume the state file still exists.
-
-In non-git mode, use plain `rm -f` — no `git rm`, no commit.

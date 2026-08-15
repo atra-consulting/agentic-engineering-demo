@@ -32,7 +32,7 @@ File Naming:
   - PRD-[task_key].md
   - PLAN-[task_key].md
   - STATE-[task_key].json
-  - REVIEW-[task_key].md
+  - REVIEW-[branch_name].md
 
 Examples:
   /plan-and-do "Add Redis caching for sessions"

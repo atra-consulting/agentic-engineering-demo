@@ -748,7 +748,7 @@ Code review may have changed implementation or test code. Re-run the relevant ru
 **If `test_runner_agents` is non-empty:** Launch the same runners as Step 9.1 (match by scope) in parallel via Task tool, model: `haiku`. Apply the **DISPATCH NARRATION RULE** (`plan-and-do-delegation.md` → `## 13. DISPATCH NARRATION RULE`). Record the dispatch in `delegation.assignments` (step "Post-review testing: [agent]").
 
 - All pass → continue to STEP 12
-- Any fail → delegate the fix to the coding agent that owns the failing code, at the tier the failure warrants — a clear one-line break is `haiku`, an unknown cause is `opus`. Fix directly only when `coding_agents` is empty or `agents_available == false`. Record the dispatch in `delegation.assignments`. Commit `fix: Restore green tests after review. [task_key]`, re-run once. If still failing, surface the report and call the `AskUserQuestion` tool with: 1-Investigate (returns to STEP 8), 2-Skip to summary, 3-Quit.
+- Any fail → delegate the fix to the coding agent that owns the failing code, at the tier the failure warrants — a clear one-line break is `haiku`, an unknown cause is `opus`. Fix directly only when `coding_agents` is empty or `agents_available == false`. Record the dispatch in `delegation.assignments`. Commit `fix: Restore green tests after review. [task_key]`, re-run once. If still failing, surface the report and call the `AskUserQuestion` tool with: 1-Investigate (returns to STEP 8), 2-Skip to summary, 3-Quit. (This one-retry-then-ask flow is intentional, not a missing escalation ladder — Step 11.1 does not run the full two-attempts-per-tier loop from `## 8. ESCALATION LOOP` that Step 8.1/9.2 use. This step already had a working fix-and-recheck mechanism before the delegation feature existed, and PRD R9 chose to leave it unchanged rather than fold it into the ladder.)
 
 **Otherwise (no agents):** Re-run `[test_command]` directly. Same fail-handling as above.
 
@@ -773,11 +773,13 @@ Full step body lives in `plan-and-do-modes.md` → `## STEP 12: DOCUMENTATION UP
 
 Use `config.keep_files` from Step 7.5b. No prompt — the user already decided.
 
-Resolve and delete per `plan-and-do-setup.md` → `## CLEANUP RESOLUTION`. The review file resolves by `REVIEW-[branch_name].md`, NOT by task key. The state file is NOT touched here — it survives this step and is only deleted later, in Step 13.2, if applicable.
+Resolve and delete per `plan-and-do-setup.md` → `## CLEANUP RESOLUTION (Step 13.0)`. The review file resolves by `REVIEW-[branch_name].md`, NOT by task key. The state file is NOT touched here — it survives this step and is only deleted later, in Step 13.2 (below), which is fully self-contained.
 
 Display the full absolute path of every file kept.
 
 ### Step 13.1: Display Summary
+
+The table below gets one row per dispatch recorded in `delegation.assignments`, in run order.
 
 ```
 === Implementation Summary ===
@@ -795,8 +797,6 @@ Agents & Models Used: [table below, or "None (direct mode)"]
 | Step | Agent | Model | Verified by | Escalated |
 |------|-------|-------|-------------|-----------|
 | [e.g. "PRD draft", "PRD review: ba-reviewer", "Plan fix", "Implementation: [task group]", "Phase [N] review: [agent]", "Test fix", "Review fix: [file]", "Post-review testing: [agent]"] | [agent] | [tier] | [diff read / reviewer / tests / n/a] | [no, or "haiku -> sonnet"] |
-
-One row per dispatch recorded in `delegation.assignments`, in run order.
 
 [If any slice ran directly after opus failed twice, say so here.]
 

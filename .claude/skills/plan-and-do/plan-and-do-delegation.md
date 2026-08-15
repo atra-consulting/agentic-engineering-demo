@@ -100,7 +100,7 @@ So every slice prompt stands alone. State all seven of these:
 6. **The Commit Scoping Rule and Push Discipline.** `git add [exact paths]`. NEVER `git add -A`, `git add .`, or `git commit -a` — and never `git push`, not even after a successful commit. Put this in every prompt, word for word.
 7. **Do not run the project test suite.** Report what you changed; the orchestrator runs the tests.
 
-**Item 7 binds coding slices only.** A `test-runner-*` dispatch is exempt — running the suite is its entire purpose. Never put item 7 in a test-runner prompt.
+**Item 7 binds coding slices only.** A `be-test-runner`/`fe-test-runner` dispatch is exempt — running the suite is its entire purpose. Never put item 7 in a test-runner prompt.
 
 A vague prompt burns a whole attempt. Write it once, write it right.
 
@@ -160,6 +160,8 @@ The arithmetic: a slice starting at `haiku` gets at most 6 worker attempts befor
 A planner agent is optional. This section shows how to build one. Follow it end to end — you need no other file.
 
 ### 9a. Why
+
+This repo already has an adapted planner at `.claude/agents/planner.md` (per PRD R6) — it differs from the generic copy-paste template in § 9c below, since it's adapted to this project's real modules and agent roster. The sections below are the general how-to, kept for reference.
 
 A planner agent writes the planning documents:
 
@@ -352,7 +354,7 @@ Reference for SKILL.md Step 7.3 (Generate Detailed Plan). SKILL.md reads this se
 
 1. **Draft — with a planner:** Launch the first `planner_agent` via Task tool. It writes the WHOLE plan in one dispatch. Model: `opus` for a complex task, `sonnet` for a small one. No merge step needed. Skip to 3.
 2. **Draft — no planner:** Launch ALL `coding_agents` in parallel via Task tool. Each coder contributes plan tasks for their domain (backend, frontend, database, etc.). Model per coder: match the difficulty of that domain's slice. Then **merge** all outputs into one coherent plan. Resolve overlaps and ensure consistent task ordering. If `coding_agents` is also empty, fall back to the first `writer_agent`; if there is none, write the plan directly.
-3. **Review:** Launch the applicable `review_agents` in parallel via Task tool. Each reviewer checks the plan for completeness, feasibility, missing edge cases, and correct task ordering from their domain perspective. Model: one tier below the draft, floor of `sonnet` for security or architecture.
+3. **Review:** Apply the **REVIEWER SCOPE FILTER** (`## 14. REVIEWER SCOPE FILTER`) and launch the applicable `review_agents` in parallel via Task tool. Each reviewer checks the plan for completeness, feasibility, missing edge cases, and correct task ordering from their domain perspective. Model: one tier below the draft, floor of `sonnet` for security or architecture.
 4. **Fix:** Collect all reviewer findings. Delegate the fixes to the drafting agent — no user prompt needed. Model: same tier as the draft. If reviewers flag missing tasks or wrong ordering, update the plan. Fix directly only when `coding_agents` is empty or `agents_available == false`. Failed fixes run the escalation loop.
 5. **Result:** The reviewed and fixed plan becomes the final draft for user approval.
 
@@ -468,7 +470,7 @@ This keeps the user informed about which agents do what work, without breaking t
 
 ## 14. REVIEWER SCOPE FILTER
 
-When launching `review_agents` (Steps 6.2, 8.1, 11.1), do NOT launch every reviewer every time. Filter by domain match against the work being reviewed:
+When launching `review_agents` (Steps 6.2, 7.3, 8.1), do NOT launch every reviewer every time. Filter by domain match against the work being reviewed:
 
 - Files under `backend/` or backend keywords (route, service, middleware, schema) → include `be-reviewer`
 - Files under `frontend/` or frontend keywords (component, template, route, form) → include `fe-reviewer`

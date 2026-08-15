@@ -224,7 +224,7 @@ No automated tests. Manual verification, run in this order.
 
 ## Non-Functional Requirements
 
-- **Size.** SKILL.md ≤ 850 lines, target ~800. Every reference file ≤ 850.
+- **Size.** SKILL.md ≤ 850 lines, target ≤840 (revised from an initial ~800 estimate once the plan's actual extraction scope — TICKET MODE, STEP 12, and the AGENT DISCOVERY family — was known). Every reference file ≤ 850.
 - **Backward compatibility.** No breaking change to existing runs, state files, plans, or the ticket flow.
 - **Fidelity.** Verbatim blocks stay verbatim. Only the documented renames and trims.
 - **Style.** Project markdown style: short sentences, active voice, empty line before lists and code blocks.
@@ -280,3 +280,15 @@ No automated tests. Manual verification, run in this order.
 - [ ] `/plan-and-do doctor` reports the config resolution and lists planner agents.
 - [ ] Ticket mode, non-git mode, and direct mode all still work after the extraction.
 - [ ] Every trim and every place this copy differed from the package is reported.
+
+## Implementierung
+
+Implemented on branch `add-settings-planner-tiers`.
+
+Commits:
+- `bb058ef` docs: Add specifications (PRD) for plan-and-do settings file and model-tier delegation
+- `ee66059` docs: Add detailed plan for plan-and-do settings file and model-tier delegation
+- `a67e276` feat: Add settings file and model-tier delegation to plan-and-do skill
+- `3ef20c6` fix: Name the real test-runner agents in the delegation reference
+
+PR: not yet created
