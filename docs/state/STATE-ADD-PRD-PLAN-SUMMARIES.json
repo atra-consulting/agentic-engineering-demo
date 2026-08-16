@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "task_key": "ADD-PRD-PLAN-SUMMARIES",
+  "status": "in_progress",
+  "current_step": "3.4",
+  "started": "2026-08-16T00:00:00Z",
+  "updated": "2026-08-16T00:00:00Z",
+  "config": {
+    "input_mode": "freeform",
+    "user_description": "Update .claude/skills/plan-and-do/SKILL.md (and related reference files) so PRDs, plans, and reviews all start with a summary: business section first, then technical section. Business summary must be understandable by business people; technical summary only by technical people. PRD is written for business people (may end with a high-level technical section). Plan is written for technical people only, apart from its business summary section. Enforce the existing brief/short-sentence writing style for PRDs, plans, AND reviews.",
+    "special_instructions": null,
+    "ticket_mode": false,
+    "ticket_id": null,
+    "ticket_url": null,
+    "ticket_api_base": null,
+    "ticket_claimed": false,
+    "branch_name": "add-prd-plan-summaries-doc-structure",
+    "original_branch": "main",
+    "original_head": "1a5889ec4b377e41d37020132e08c0a6ec13842c",
+    "docs_folder": "docs",
+    "is_git_repo": true,
+    "workflow_scope": null,
+    "pr_prefix": null,
+    "pr_exists": false,
+    "pr_url": null,
+    "keep_settings": {
+      "prd": "always",
+      "plan": "always",
+      "review": "always",
+      "state": "never"
+    },
+    "keep_files": null,
+    "open_md_setting": "never",
+    "auto_open_md": false
+  },
+  "discovery": {
+    "agents_available": false,
+    "planner_agents": [],
+    "writer_agents": [],
+    "coding_agents": [],
+    "review_agents": [],
+    "test_coding_agents": [],
+    "test_review_agents": [],
+    "test_runner_agents": [],
+    "tooling_coding_agents": [],
+    "tooling_review_agents": [],
+    "test_command": null
+  },
+  "artifacts": {
+    "prd_skipped": null,
+    "prd_file": null,
+    "plan_file": null
+  },
+  "delegation": {
+    "assignments": [],
+    "escalations": []
+  },
+  "completed_steps": []
+}
