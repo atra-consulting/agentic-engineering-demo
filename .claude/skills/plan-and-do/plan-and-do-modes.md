@@ -32,7 +32,7 @@ File Naming:
   - PRD-[task_key].md
   - PLAN-[task_key].md
   - STATE-[task_key].json
-  - REVIEW-[task_key].md
+  - REVIEW-[branch_name].md
 
 Examples:
   /plan-and-do "Add Redis caching for sessions"
@@ -56,21 +56,44 @@ Features:
   - Checkpoint persistence (quit/resume at any checkpoint)
   - Detects an existing PR early; auto-derives PR prefix (feat/fix/chore) from commits
   - PR creation/update and merge workflow
+  - Config file (claude.atra.json): set standing keep/delete preferences for the PRD, plan, review, and state files, and whether Markdown artifacts auto-open in your default app (openMd)
+  - Model-tier delegation: dispatches work to haiku/sonnet/opus by difficulty, with verification and escalation
 
 Agent Support:
   If the project CLAUDE.md defines an ## Agents section:
   - Coding agents (be-coder, fe-coder, db-coder, ui-designer) implement tasks
   - Reviewer agents (be-reviewer, fe-reviewer, db-reviewer, ui-reviewer) review code
   - Independent agents launch in parallel for speed
+  - Planner agents (name ends -planner, or is exactly planner) draft the PRD and the plan. Optional.
   If no agents defined: skill does all work directly (original behavior)
+
+Delegation:
+  Three worker tiers. Every agent dispatch names one:
+  - haiku: mechanical work. Renames, boilerplate, spelled-out diffs, repetitive edits.
+  - sonnet: standard, well-specified coding. One endpoint, a bug fix with a known cause.
+  - opus: hard slices. Cross-cutting changes, unknown-cause debugging, security- or architecture-sensitive work.
+  Rule: pick the lowest tier that can plausibly succeed.
+  Implementation slices default to sonnet — opus needs a named trigger, never a hunch.
+  Agent picks the domain. Model picks the difficulty. The model parameter beats the agent's frontmatter model.
+  Verification: every coding slice gets checked — diff read or delegated review.
+  Tests never run per slice. They run once after a parallel group, and at Step 9.
+  Escalation: two attempts per tier, then one tier up.
+  Full rules: plan-and-do-delegation.md
+
+  Planner agent (optional): name ends -planner, or is exactly planner.
+  When present, it drafts the PRD (Step 6.2) and the whole plan (Step 7.3).
+  Step-by-step creation guide with a copy-paste agent file: plan-and-do-delegation.md
 
 File Locations:
   - Specifications (PRD) files: [docs]/prds/PRD-[task_key].md
   - Detailed plan files: [docs]/plans/PLAN-[task_key].md
   - State files: [docs]/state/STATE-[task_key].json
+  - Review files: [docs]/reviews/REVIEW-*.md
   - Uses existing 'doc' or 'docs' folder, or creates 'docs' if neither exists
   - All files committed to git automatically
   - Planning files kept by default (option to delete)
+  - Planning files: keep/delete controlled by claude.atra.json's `planAndDo.keepFiles` (global ~/.claude/claude.atra.json + local ./claude.atra.json, local overrides global; legacy flat-format files with top-level `keepFiles` still work); falls back to a one-time prompt at plan approval for any file set to "ask"
+  - Markdown auto-open: controlled by `planAndDo.openMd` in the same claude.atra.json (always/never/ask; legacy flat-format files use top-level `openMd`); "ask" prompts once, before Step 4
 
 Workflow Steps:
   1-3. Setup (checkpoint, tools, docs folder)
@@ -112,6 +135,19 @@ Integrations:
   - gh CLI (optional): PR creation and merge
   - review (required): Code review
   - Task tool (optional): Agent delegation
+
+Success Criteria:
+  - Branch always created when git available (original branch stays clean)
+  - State file tracks progress; committed at init, pause, and completion only
+  - PRD created or explicitly skipped
+  - Detailed plan created with test cases
+  - Implementation matches plan; tests pass
+  - Code review via /project:review completed
+  - No uncommitted changes when skill finishes
+  - Agents used when available (fallback to direct mode)
+  - Every agent dispatch names an explicit model
+  - No fix path writes files directly while coding agents exist
+  - Each coding slice verified, and escalated per the ladder when it fails
 ```
 
 ---
@@ -143,15 +179,31 @@ Execute when `$ARGUMENTS` contains "doctor". Perform health checks and STOP:
      - If on main/master: Report "Currently on main branch (should be on feature branch)"
      - If failed: Report "Cannot determine current branch"
 
-3. Agent Discovery Check:
+3. ATRA Config Check:
+   ```
+   Checking claude.atra.json config...
+   ```
+   - Look for both files: global `~/.claude/claude.atra.json`, local `./claude.atra.json`.
+     - Validate JSON. Malformed → Report "Warning: [path] is not valid JSON. Ignoring."
+     - Detect nested vs. legacy-flat format per file, same rule as CONFIG LOADING.
+     - Report both locations' absolute paths and status (`existing`/`missing` — doctor never creates files).
+   - Resolve the five keys (`prd`, `plan`, `review`, `state`, `openMd`) local → global → default, with sources.
+     - Report the resolved `openMd` value only. NEVER run the auto-open prompt — doctor is read-only and asks nothing.
+   - Neither file exists → Report "No config (using defaults): prd=always, plan=always, review=always, state=never, openMd=never".
+   - At least one file exists → Report "Config resolved: prd=[value] ([source]), plan=[value] ([source]), review=[value] ([source]), state=[value] ([source]), openMd=[value] ([source])".
+   - Local-override note, same qualifying rule as CONFIG LOADING (only when local and global both have present-and-valid values for a key, and the two differ): report which keys and their global values.
+
+   **NOTE for maintainers:** Doctor mode short-circuits before Step 3.3 runs, so it cannot call CONFIG LOADING directly — this check duplicates the same read/parse/precedence rules by hand. If you change CONFIG LOADING (in `plan-and-do-setup.md`), update this check to match, and vice versa.
+
+4. Agent Discovery Check:
    ```
    Checking agent availability...
    ```
    - Read project CLAUDE.md for ## Agents section
-     - If found: List discovered agents
+     - If found: List discovered agents by category — `writer_agents`, `coding_agents`, `review_agents`, `test_coding_agents`, `test_review_agents`, `test_runner_agents`, `tooling_coding_agents`, `tooling_review_agents`, `planner_agents`
      - If not found: Report "No agents in project CLAUDE.md (skill runs in direct mode)"
 
-4. Test Command Check:
+5. Test Command Check:
    ```
    Checking for test command...
    ```
@@ -159,13 +211,128 @@ Execute when `$ARGUMENTS` contains "doctor". Perform health checks and STOP:
      - If found: Report test command
      - If not found: Report "No test command found in CLAUDE.md (will ask during execution)"
 
-5. Overall Status Summary:
+6. Overall Status Summary:
    ```
 
    Overall Status: [SUCCESS / FAILED]
    ```
    - SUCCESS: git available and in git repository
    - FAILED: git missing or not in git repository
+
+---
+
+## TICKET MODE
+
+The skill can process a Kanban ticket from the workshop ticket system instead of a freeform description. Full API contract: `docs/specs/SPEC-API-TICKETS.md` (read the "For skill authors" section).
+
+**When it triggers.** In Step 1, if the *entire* trimmed `$ARGUMENTS` (ignoring any `resume:<n>` token) is one of:
+- a **ticket URL** — matches `…/admin/tickets/<id>` for any host/port, e.g. `http://localhost:7200/admin/tickets/8`
+- a **bare positive integer** — matches `^\d+$`, e.g. `8`
+
+then set `ticket_mode = true` and extract `ticket_id`. Otherwise `ticket_mode = false` and the skill runs its normal freeform flow, unchanged. A real task description is never a bare number, so this is unambiguous.
+
+Ticket input does **not** support `resume:<step>` — each ticket run reads the live board state fresh in TM.1 and reacts; there is no saved-run resume for a ticket. (`resume:<step>` applies only to freeform description input.)
+
+**Board terminology.** The board at `/admin/tickets` shows **German labels only** — map them to the `status` enum:
+
+| Skill term | German column | `status` | notes |
+|------------|---------------|----------|-------|
+| Ready | **Zu bereit** | `TODO` | claimable **only** when `owner=AI` |
+| In Progress | **In Arbeit** | `IN_PROGRESS` | |
+| Blocked | **Wartet** | `ON_HOLD` | `owner` flips to `HUMAN` |
+| Done | **Erledigt** | `DONE` | `solution=DONE` |
+| (intake) | Definition | `DEFINITION` | never processed |
+
+`owner` (`AI` | `HUMAN`) is a **separate field**, not a column or a visible label. **The skill only processes tickets that are `TODO` + `owner=AI`** — i.e. in the "Ready" ("Zu bereit") column and owned by the AI.
+
+**Config (store in state under `config`).**
+- `ticket_api_base` — default `http://localhost:7070` (the backend). A bare number or a `localhost:7200` frontend URL both use `http://localhost:7070`. For a non-localhost URL, use that URL's origin as the base (replace a `:7200` frontend port with `:7070` if present); if unsure, ask the user for the backend base URL.
+- **Auth** — the backend needs `AGENT_API_TOKEN` set in `backend/.env` for **any** agent call to work: an unset token → **401** on every agent endpoint, even from localhost (loopback bypass is gated on the token being configured). Read `backend/.env` with the **Read** tool to get the `AGENT_API_TOKEN` value (do not `source` it into the shell), then send `-H "Authorization: Bearer <that value>"` on every agent call — or, if `AGENT_AUTH_ALLOW_LOOPBACK=1` is set, omit the header and let the localhost bypass through. If `backend/.env` has no `AGENT_API_TOKEN`, tell the user to set it (see the "Local setup" block in `docs/specs/SPEC-API-TICKETS.md`) and STOP. The admin session used for the claim comment does **not** need the agent token.
+- `ticket_url` — the frontend URL `http://localhost:7200/admin/tickets/<id>` (rebuild it when only a number was given).
+
+**Comment on every state change.** Agent verbs carry a comment only on `done` and `ask`. The claim (`/start` → In Progress) has **no** comment field, so the skill posts that one comment through a short-lived **admin session** (workshop admin user `admin` / `admin123`):
+
+```bash
+# Login body uses German field names: benutzername / passwort. Cookie name is set by the server (-c captures it).
+# Use a per-ticket cookie jar so concurrent runs don't clobber each other. Verify login returned 200 before commenting.
+JAR="/tmp/pad-cookies-<id>.txt"
+code=$(curl -s -o /dev/null -w "%{http_code}" -c "$JAR" -X POST -H "Content-Type: application/json" \
+  -d '{"benutzername":"admin","passwort":"admin123"}' "$ticket_api_base/api/auth/login")
+# if $code != 200 -> admin login failed; warn the user (the transition still happened, only the comment is missing) and skip the comment
+curl -s -b "$JAR" -X POST -H "Content-Type: application/json" \
+  -d '{"body":"<message>"}' "$ticket_api_base/api/tickets/<id>/comments"
+rm -f "$JAR"
+```
+Use the admin session **only** for the extra In-Progress comment. Do the real transitions with the agent verbs below. (`done` and `ask` already post their own comments, so no admin comment is needed there.) A failed admin login is non-fatal — warn, skip the comment, keep going.
+
+### TM.1 — Resolve & verify (run from Step 1, ticket mode only)
+
+Each fresh `/plan-and-do <id>` run creates a new state file (Step 3.4), so ticket mode does **not** try to auto-resume a saved run — it just reads the live board state and reacts.
+
+1. `GET $ticket_api_base/api/tickets/<id>` (auth per the TICKET MODE config). `404` → "Ticket <id> not found", STOP. `401` → the backend has no `AGENT_API_TOKEN` set (or the token/loopback is wrong); tell the user to fix `backend/.env` per the "Local setup" block in `docs/specs/SPEC-API-TICKETS.md`, STOP.
+2. Branch on `status` + `owner` — **only `TODO`+`AI` is processed**:
+   - `TODO` + `owner=AI` → claimable. Continue to step 3.
+   - `IN_PROGRESS` + `owner=AI` → already claimed (a previous run is running or stalled). Do NOT re-claim or change anything. Tell the user: "Ticket <id> is already In Arbeit (AI) — a previous run may still hold it. If it stalled, finish it or hand it back to a human on the board (`/admin/tickets/<id>`) before re-running." STOP.
+   - anything else (`DEFINITION`, `ON_HOLD`, `DONE`, or `owner=HUMAN`) → "Ticket <id> is <status> / <owner> — not Ready+AI, nothing to do." STOP.
+3. Set `user_description` = ticket `title` + two newlines + `body` (append the existing `comments` thread for context). Set `task_key = TICKET-<id>-<2–4 kebab words from the title, UPPERCASED, umlauts transliterated: ä→ae ö→oe ü→ue ß→ss>` (e.g. ticket 8 "Icons für Aktivitätstypen" → `TICKET-8-ICONS-FUER-AKTIVITAETSTYPEN`). Set `ticket_url`.
+
+### TM.2 — Claim → In Progress (run from Step 4.6, after the branch exists)
+
+1. `POST $ticket_api_base/api/tickets/<id>/start` → `IN_PROGRESS`. A `409` means it is no longer Ready+AI (someone claimed it since TM.1) — STOP and tell the user. (The branch/state file already created are harmless; the user can delete the branch.)
+2. On success set `config.ticket_claimed = true` in the state file (so the Quit hook and Step 8.2 know the ticket is live).
+3. Post the state-change comment via the admin session, e.g. `"Von der KI übernommen. Status → In Arbeit."` — append `" (Branch: <branch_name>)"` only when `is_git_repo`.
+
+### TM.3 — Finish → Done (run from Step 13.4, on success)
+
+`POST $ticket_api_base/api/tickets/<id>/done` with body `{"comment":"<2–3 sentence summary of the change + the PR link if one was created>"}`. Moves the ticket to `DONE` (`solution=DONE`); the `comment` is the state-change comment. **On failure** (`409` not IN_PROGRESS, `404`, `401`, or a network error — retry once on a transient network error): do NOT claim success — show the response and tell the user the ticket is still "In Arbeit" and needs manual completion. Reflect this in the Step 13.4 output.
+
+### TM.4 — Question / error → Blocked + Human (run on any unanswerable question or unrecoverable error while in ticket mode)
+
+`POST $ticket_api_base/api/tickets/<id>/ask` with body `{"question":"<the exact question or error text, plus what you already tried>"}`. This moves the ticket to `ON_HOLD` ("Wartet"), sets `owner=HUMAN`, and posts the text as an `AGENT` comment — the state-change comment **and** the reassignment to Human in a single call. Then STOP the skill. (This is for a genuine question or error — **not** a plain user Quit; see the Quit Pattern.)
+
+---
+
+## STEP 12: DOCUMENTATION UPDATES
+
+Reached only for `workflow_scope == "full"` — Steps 9.3 and 10.3 route the other scopes straight to Step 13. So the doc sync runs on the full path, right before the PR is opened.
+
+This step syncs the project docs (`.claude/agents/`, `docs/specs/`, `CLAUDE.md`) with the code this run produced. It runs **before** PR creation (POST-COMPLETION PC.2).
+
+The `update-claude-files` skill owns this sync. It scopes to the branch's changes and requires the project's agent roster.
+
+### Step 12.1: Run the doc-sync skill
+
+**If `agents_available` and `is_git_repo`:** Invoke the skill in embedded mode, scoped to the branch. Substitute the real SHA from `config.original_head`:
+```
+/project:update-claude-files "embedded base:[original_head]"
+```
+**Always invoke the project skill `project:update-claude-files`** — never a plugin or global skill of the same base name (e.g. `bpf:update-claude-files`). The `project:` prefix is required to disambiguate.
+
+Wait for completion. The skill writes `docs/state/UPDATE-CLAUDE-FILES-RESULT.md` (gitignored). It never prompts and never blocks.
+
+**If `is_git_repo` but NOT `agents_available`:** Skip the skill. Display:
+```
+No agents found — skipping doc sync.
+Install the agents first: https://github.com/atra-consulting/coding-with-ai-lab/tree/main/.claude/agents
+```
+Continue to Step 12.3 (do not block the PR).
+
+**If NOT `is_git_repo`:** Direct fallback — scan `CLAUDE.md` and `docs/specs/` for updates the implementation made necessary, and apply them directly (no branch diff available). Skip the result-file logic below.
+
+### Step 12.2: Commit the result
+
+**Only when the skill ran in Step 12.1 (`agents_available` and `is_git_repo`):**
+
+Read `docs/state/UPDATE-CLAUDE-FILES-RESULT.md`. Act on its `status`:
+- `status: updated` → Display "Applying documentation updates: [files from result]." Stage only the changed docs (`git add .claude/agents docs/specs CLAUDE.md`) and commit `docs: Update project documentation. [task_key]` (with `PRD:` footer when `prd_file` exists). Do NOT stage the result file — it is gitignored.
+- `status: no-changes` → Display "No documentation updates needed." Commit nothing.
+- `status: skipped-no-agents` or `status: error` → Display the note from the result file. Commit nothing. Continue — never block the PR.
+
+### Step 12.3: Advance to Summary
+
+**This is NOT a user checkpoint. Never call AskUserQuestion here.**
+
+Update state: `current_step` = "12.3". → STEP 13.
 
 ---
 
@@ -191,6 +358,13 @@ Set paths:
 - `review_dir` = `[docs_folder]/reviews`
 
 **Restore variables from state.** Now that `state_dir` is set, read `[state_dir]/STATE-[task_key].json` and load these in-memory values before routing: `branch_name`, `original_branch`, `workflow_scope`, `pr_prefix`, `pr_exists`, `pr_url`. Trust the state file over conversation memory.
+
+- Read `config.keep_files` from the state file as an OBJECT (per-file booleans, `true` = keep). Handle each case:
+  - Absent or null → keep all files. Display: "keep_files not found. Defaulting to keep all files."
+  - Legacy single boolean `true` → keep all files. Display: "keep_files in legacy format (true). Keeping all files."
+  - Legacy single boolean `false` → delete `prd`, `plan`, `state`; keep `review`.
+- Also read `config.keep_settings` from the state file if present (informational only — cleanup decisions come from `keep_files`).
+- Read `config.auto_open_md` from the state file. Absent (legacy state predates this feature) → default to `false`.
 
 **Prerequisites Validation:**
 

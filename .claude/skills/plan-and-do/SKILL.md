@@ -2,8 +2,8 @@
 name: "project:plan-and-do"
 description: "End-to-end implementation workflow from idea to code review. Use for building features, implementing tasks, fixing complex bugs, or any substantial coding work. Handles planning, implementation, testing, and review automatically."
 argument-hint: "description" [special-instructions|resume:<step>] | ticket-url | ticket-number
-version: 1.12.0
-last-modified: 2026-07-07
+version: 2.0.0
+last-modified: 2026-08-15
 allowed-tools:
   - Read
   - Write
@@ -18,6 +18,7 @@ allowed-tools:
   - Bash(gh:*)
   - Bash(curl:*)
   - Bash(rm:*)
+  - Bash(open:*)
   - Task
   - AskUserQuestion
 ---
@@ -25,27 +26,25 @@ allowed-tools:
 # Plan and Do Workflow
 
 <!--
-Usage: /plan-and-do ["description"] [special-instructions]
-Usage: /plan-and-do <ticket-url-or-number>          (process a Kanban ticket — see ## TICKET MODE)
-Usage: /plan-and-do                                (scans for resumable tasks)
-Example: /plan-and-do "Add Redis caching for sessions"
-Example with instructions: /plan-and-do "Add Redis caching" "Use node-cache with 5 min TTL"
-Example ticket (URL): /plan-and-do http://localhost:7200/admin/tickets/8
-Example ticket (number): /plan-and-do 8
-Variables: $ARGUMENTS (freeform description + optional special instructions, OR a ticket URL/number)
-Workflow: End-to-end implementation from task description to code review
-Prerequisites: git, test execution capability
+Usage: /plan-and-do "description" [special-instructions] | (empty — scans for resumable tasks) | <input> resume:<step> | <ticket-url-or-number> (ticket mode — see plan-and-do-modes.md, ## TICKET MODE)
+Variables: $ARGUMENTS (freeform description + optional special instructions, OR a ticket URL/number, OR resume:<step>) | Prerequisites: git, test execution capability
 -->
 
 ## Branch Protection
 
-All commits go to the NEW BRANCH created by this skill. When you start on a feature branch (not main/master) you may choose to keep it instead of creating a new one (Step 4.4) — then commits go to that branch. When the skill creates a new branch, the original branch always stays clean. State file written to disk first, committed after switching to new branch.
+All commits go to the NEW BRANCH created by this skill (or the kept feature branch, Step 4.4); the original branch always stays clean. State file written to disk first, committed after switching branches.
 
-**PR Target Rule:** PRs always target `original_branch` — the branch that was active when the skill started. This branch is captured in Step 4.4 via `git branch --show-current` and stored in `config.original_branch`. Never default to main/master for PRs.
+**PR Target Rule:** PRs always target `original_branch` — the branch active when the skill started, captured in Step 4.4 via `git branch --show-current` and stored in `config.original_branch`. Never default to main/master.
 
-**Non-git mode:** If the project directory is not a git repository (e.g., ZIP download), all git operations (branch, commit, push, PR) are skipped. The skill still runs: state file, PRD, plan, implementation, and review all work without git.
+**Non-git mode:** When `is_git_repo = false`, all git operations (branch, commit, push, PR) are skipped; the rest of the skill still runs.
 
-**Review scope:** Code review (Step 10) compares against `original_head` — the starting branch's commit captured at Step 4.4 — not main/master.
+**Review scope:** Code review (Step 10) compares against `original_head` — captured at Step 4.4 — not main/master.
+
+---
+
+## Commit Scoping Rule
+
+**Every commit in this skill stages only the specific files it changed.** Always use `git add [exact file paths]`. NEVER use `git add -A`, `git add .`, or `git commit -a`. This keeps stray untracked files out of commits — above all the local `claude.atra.json` that CONFIG LOADING creates in the working directory. That file must stay untracked unless the user commits it themselves.
 
 ---
 
@@ -63,7 +62,7 @@ If NOT in plan mode → continue.
 ## SKILL HEADER
 
 ```
-Plan and Do (v1.12.0, 2026-07-07)
+Plan and Do (v2.0.0, 2026-08-15)
 ************************************
 
 Plan and implement any work from freeform description
@@ -105,6 +104,20 @@ When displaying any file path to the user, ALWAYS use the full absolute path. Ge
 
 **If the user edited any file since the last checkpoint**, re-display all artifact paths so the user can re-open them.
 
+**"New or changed since the last checkpoint"** means: the file did not exist at the previous checkpoint, or its content changed since then (just created this step, or edited via the "Edit" checkpoint choice).
+
+**Then, if `config.auto_open_md == true`:** automatically open every MD artifact that is new or changed since the last checkpoint (as defined above), per the OPEN IN APP RULE's Automatic behavior, before presenting the checkpoint choices.
+
+---
+
+## OPEN IN APP RULE
+
+Opens PRD/plan/review files in the macOS default app (`open [path]`, fallback `open -a "Marked" [path]`) — never the state JSON. macOS only; skip silently elsewhere.
+
+The "Open in app" checkpoint choice opens on demand and returns to the SAME checkpoint — it never advances the workflow. Automatic open (`config.auto_open_md == true`) fires only for artifacts new or changed since the last checkpoint.
+
+Full rules: `plan-and-do-setup.md` → `## OPEN IN APP RULE`.
+
 ---
 
 ## HOW TO ASK THE USER FOR DECISIONS
@@ -138,8 +151,8 @@ Never do any of these — each is a bug:
 When user chooses "quit" at any checkpoint:
 1. Update state file: set `status` = "paused"
 2. **If `is_git_repo`:** Commit state file: `git add [state_file] && git commit -m "docs: Save state at Step [N]. [task_key]"`
-3. **If `ticket_mode = true` AND `ticket_claimed = true`:** Quit is a pause, not a question or error — do **not** run TM.4. Leave the ticket in "In Arbeit" and post a neutral admin-session comment, e.g. "KI-Bearbeitung pausiert. Ticket bleibt in In Arbeit." so the board shows why. (To instead return it to a human, the user hands it back on the board.) If `ticket_claimed = false`, the ticket was never claimed — do nothing.
-4. Display: "Progress saved. Resuming a paused ticket run is not automatic — re-running /plan-and-do [id] starts fresh and will see the ticket as already In Arbeit (TM.1)."
+3. **If `ticket_mode = true` AND `ticket_claimed = true`:** Quit is a pause, not a question or error — do **not** run TM.4 (`plan-and-do-modes.md` → `## TICKET MODE`). Leave the ticket in "In Arbeit" and post a neutral admin-session comment, e.g. "KI-Bearbeitung pausiert. Ticket bleibt in In Arbeit." so the board shows why. (To instead return it to a human, the user hands it back on the board.) If `ticket_claimed = false`, the ticket was never claimed — do nothing.
+4. Display: "Progress saved. Resuming a paused ticket run is not automatic — re-running /plan-and-do [id] starts fresh and will see the ticket as already In Arbeit." (That fresh run re-runs TM.1 — see `plan-and-do-modes.md` → `## TICKET MODE`.)
 5. STOP (clean exit)
 
 ### Standard Checkpoint
@@ -148,67 +161,47 @@ When user chooses "quit" at any checkpoint:
 
 Before presenting choices, display artifact paths per the ARTIFACT PATH DISPLAY RULE above.
 
-At each checkpoint, **call the `AskUserQuestion` tool** with three choices:
+At each checkpoint, **call the `AskUserQuestion` tool** with four choices:
 - Continue → proceed to next step
 - Edit → call the `AskUserQuestion` tool again to ask what changes are needed, apply them, return to this checkpoint
+- Open in app → open the existing MD artifacts (PRD, plan, review) per the OPEN IN APP RULE, then return to this checkpoint
 - Quit → execute Quit Pattern above
 
 When asking for approval, also display the full absolute path of every file that was created or changed since the last checkpoint.
 
 ---
 
+## DELEGATION
+
+When agents are available, you orchestrate. You do not do the hands-on work. You slice the task, write standalone subagent prompts, integrate results, and verify. Workers write the code, docs, and tests.
+
+Every Task-tool dispatch names a model. **Agent picks the domain. Model picks the difficulty.** The `model` parameter overrides the agent's frontmatter `model:`.
+
+Three worker tiers. Pick the LOWEST tier that can plausibly succeed:
+
+- `haiku` — mechanical. Renames, boilerplate, applying a spelled-out diff, repetitive edits with a clear pattern.
+- `sonnet` — standard well-specified coding. One component, one endpoint, a bug fix with a known cause.
+- `opus` — hard slices. Cross-cutting changes, unknown-cause debugging, architecture- or security-sensitive work.
+
+Implementation slices (Step 8.1) default to `sonnet` — `opus` needs a named trigger (cross-cutting, unknown-cause debugging, architecture, security), never a hunch. This rule binds at plan-authoring time (Step 7.3) — once the plan is approved at Step 7.5, Step 8.1 follows it as written, without re-litigating the tier choice.
+
+All three tiers stay available no matter which model you run on. Dispatch `opus` freely even when you are Opus. You never dispatch a Task "to the orchestrator" — that is a role, not a tier. `fable` is never a worker.
+
+Verify every slice. Escalate on failure: two attempts per tier, then one tier up.
+
+You do hands-on work yourself in exactly two cases: `coding_agents` is empty (see AGENT DISCOVERY), or a slice failed twice at `opus`. Flag the second case in the summary.
+
+**Full rules — slice prompt contract, verification options, escalation loop, worked examples, and how to create a planner agent: read `plan-and-do-delegation.md`.**
+
+---
+
 ## AGENT DISCOVERY
 
-Read project's CLAUDE.md for `## Agents` section.
+Read `plan-and-do-delegation.md` → `## 12. AGENT DISCOVERY` and apply it: classify every agent in `CLAUDE.md` → `## Agents`. Sections 13 (dispatch narration) and 14 (reviewer scope filter) govern every dispatch that follows.
 
-**If found:** Parse each row's `name` and classify. Rules are **order-sensitive** — stop at the first match:
+Results feed `discovery.*` in the state file. Timing is unchanged — the first step that needs an agent triggers discovery.
 
-0. Name starts with `python-`, `shell-`, or `skill-` → tooling agent (general, not CRM domain). Classify by suffix:
-   - ends with `-reviewer` → `tooling_review_agents` (e.g., `python-reviewer`, `shell-reviewer`, `skill-reviewer`)
-   - else (ends with `-coder`) → `tooling_coding_agents` (e.g., `python-coder`, `shell-coder`, `skill-coder`)
-   Dispatch tooling agents ONLY when the changed files are tooling files (`.py`, `.sh`/`.bash`, or files under `.claude/`). Never dispatch them for CRM domain files.
-1. Contains `-test-coder` → `test_coding_agents` (e.g., `be-test-coder`, `fe-test-coder`)
-2. Contains `-test-reviewer` → `test_review_agents` (e.g., `be-test-reviewer`, `fe-test-reviewer`)
-3. Contains `-test-runner` or ends with `-tester` → `test_runner_agents` (e.g., `be-test-runner`, `fe-test-runner`)
-4. Ends with `-writer` or `-analyst` → `writer_agents` (e.g., `ba-writer`)
-5. Ends with `-coder` or `-designer` → `coding_agents` (e.g., `be-coder`, `fe-coder`, `ui-designer`)
-6. Ends with `-reviewer` → `review_agents` (e.g., `be-reviewer`, `fe-reviewer`)
-7. Anything else (e.g., `admin`) → skip as utility
-
-The order matters: `be-test-coder` must hit rule 1, NOT rule 5. Always check for `-test-` first. Rule 0 runs before all others.
-
-Display all eight lists in one block (six standard plus the two tooling lists), then set `agents_available = true` if any list is non-empty.
-
-**If not found:** Display: "No agents found. Running in direct mode." Set `agents_available = false`.
-
-## DISPATCH NARRATION RULE
-
-**Before EVERY `Task` tool call**, output ONE line:
-```
-→ Launching <agent_name>: <one-sentence purpose>
-```
-
-**When dispatching multiple agents in parallel**, output one line per agent BEFORE the parallel batch:
-```
-→ Launching be-reviewer, fe-reviewer, db-reviewer in parallel: review phase 1 output.
-```
-
-This keeps the user informed about which agents do what work, without breaking the parallel execution.
-
-## REVIEWER SCOPE FILTER
-
-When launching `review_agents` (Steps 6.2, 8.1, 11.1), do NOT launch every reviewer every time. Filter by domain match against the work being reviewed:
-
-- Files under `backend/` or backend keywords (route, service, middleware, schema) → include `be-reviewer`
-- Files under `frontend/` or frontend keywords (component, template, route, form) → include `fe-reviewer`
-- Schema/SQL/Drizzle/migration changes → include `db-reviewer`
-- Visual/CSS/SCSS/template changes → include `ui-reviewer`
-- PRDs, plans, or pure spec text → include `ba-reviewer`
-- `**/*.py` changed → include `python-reviewer`
-- `**/*.sh` or `**/*.bash` changed → include `shell-reviewer`
-- Files under `.claude/**` (skills, agents, prompts) → include `skill-reviewer`
-
-Always include at least one reviewer. If unsure, default to `be-reviewer` and `fe-reviewer`.
+If no agents are found, display "No agents found. Running in direct mode." and set `agents_available = false`.
 
 ---
 
@@ -216,76 +209,25 @@ Always include at least one reviewer. If unsure, default to `be-reviewer` and `f
 
 If you lose track of variables after context compression, re-read `[docs_folder]/state/STATE-[task_key].json`. Trust the file over conversation memory.
 
+**Legacy state files:** a state file written before a feature existed lacks its keys. Treat a missing `delegation` object, `delegation.assignments`, `delegation.escalations`, or `discovery.planner_agents` as empty (`{}` / `[]`) and create it on the next write. Never warn, never error.
+
+---
+
+## CONFIG LOADING
+
+Read `plan-and-do-setup.md` → `## CONFIG LOADING` and execute it. It creates any missing `claude.atra.json` (global and local), reads both, and resolves `keep_settings`, `open_md_setting`, and `auto_open_md`.
+
+Step 3.3 is the only caller. Nothing else runs it.
+
 ---
 
 ## TICKET MODE
 
-The skill can process a Kanban ticket from the workshop ticket system instead of a freeform description. Full API contract: `docs/specs/SPEC-API-TICKETS.md` (read the "For skill authors" section).
+Triggered in Step 1 when the whole input is a ticket URL (`…/admin/tickets/<id>`) or a bare integer (`^\d+$`). Sets `ticket_mode = true`.
 
-**When it triggers.** In Step 1, if the *entire* trimmed `$ARGUMENTS` (ignoring any `resume:<n>` token) is one of:
-- a **ticket URL** — matches `…/admin/tickets/<id>` for any host/port, e.g. `http://localhost:7200/admin/tickets/8`
-- a **bare positive integer** — matches `^\d+$`, e.g. `8`
+Full rules — board terminology, config, auth, and TM.1–TM.4 — live in `plan-and-do-modes.md` → `## TICKET MODE`. Read that file before running any TM step.
 
-then set `ticket_mode = true` and extract `ticket_id`. Otherwise `ticket_mode = false` and the skill runs its normal freeform flow, unchanged. A real task description is never a bare number, so this is unambiguous.
-
-Ticket input does **not** support `resume:<step>` — each ticket run reads the live board state fresh in TM.1 and reacts; there is no saved-run resume for a ticket. (`resume:<step>` applies only to freeform description input.)
-
-**Board terminology.** The board at `/admin/tickets` shows **German labels only** — map them to the `status` enum:
-
-| Skill term | German column | `status` | notes |
-|------------|---------------|----------|-------|
-| Ready | **Zu bereit** | `TODO` | claimable **only** when `owner=AI` |
-| In Progress | **In Arbeit** | `IN_PROGRESS` | |
-| Blocked | **Wartet** | `ON_HOLD` | `owner` flips to `HUMAN` |
-| Done | **Erledigt** | `DONE` | `solution=DONE` |
-| (intake) | Definition | `DEFINITION` | never processed |
-
-`owner` (`AI` | `HUMAN`) is a **separate field**, not a column or a visible label. **The skill only processes tickets that are `TODO` + `owner=AI`** — i.e. in the "Ready" ("Zu bereit") column and owned by the AI.
-
-**Config (store in state under `config`).**
-- `ticket_api_base` — default `http://localhost:7070` (the backend). A bare number or a `localhost:7200` frontend URL both use `http://localhost:7070`. For a non-localhost URL, use that URL's origin as the base (replace a `:7200` frontend port with `:7070` if present); if unsure, ask the user for the backend base URL.
-- **Auth** — the backend needs `AGENT_API_TOKEN` set in `backend/.env` for **any** agent call to work: an unset token → **401** on every agent endpoint, even from localhost (loopback bypass is gated on the token being configured). Read `backend/.env` with the **Read** tool to get the `AGENT_API_TOKEN` value (do not `source` it into the shell), then send `-H "Authorization: Bearer <that value>"` on every agent call — or, if `AGENT_AUTH_ALLOW_LOOPBACK=1` is set, omit the header and let the localhost bypass through. If `backend/.env` has no `AGENT_API_TOKEN`, tell the user to set it (see the "Local setup" block in `docs/specs/SPEC-API-TICKETS.md`) and STOP. The admin session used for the claim comment does **not** need the agent token.
-- `ticket_url` — the frontend URL `http://localhost:7200/admin/tickets/<id>` (rebuild it when only a number was given).
-
-**Comment on every state change.** Agent verbs carry a comment only on `done` and `ask`. The claim (`/start` → In Progress) has **no** comment field, so the skill posts that one comment through a short-lived **admin session** (workshop admin user `admin` / `admin123`):
-
-```bash
-# Login body uses German field names: benutzername / passwort. Cookie name is set by the server (-c captures it).
-# Use a per-ticket cookie jar so concurrent runs don't clobber each other. Verify login returned 200 before commenting.
-JAR="/tmp/pad-cookies-<id>.txt"
-code=$(curl -s -o /dev/null -w "%{http_code}" -c "$JAR" -X POST -H "Content-Type: application/json" \
-  -d '{"benutzername":"admin","passwort":"admin123"}' "$ticket_api_base/api/auth/login")
-# if $code != 200 -> admin login failed; warn the user (the transition still happened, only the comment is missing) and skip the comment
-curl -s -b "$JAR" -X POST -H "Content-Type: application/json" \
-  -d '{"body":"<message>"}' "$ticket_api_base/api/tickets/<id>/comments"
-rm -f "$JAR"
-```
-Use the admin session **only** for the extra In-Progress comment. Do the real transitions with the agent verbs below. (`done` and `ask` already post their own comments, so no admin comment is needed there.) A failed admin login is non-fatal — warn, skip the comment, keep going.
-
-### TM.1 — Resolve & verify (run from Step 1, ticket mode only)
-
-Each fresh `/plan-and-do <id>` run creates a new state file (Step 3.3), so ticket mode does **not** try to auto-resume a saved run — it just reads the live board state and reacts.
-
-1. `GET $ticket_api_base/api/tickets/<id>` (auth per the TICKET MODE config). `404` → "Ticket <id> not found", STOP. `401` → the backend has no `AGENT_API_TOKEN` set (or the token/loopback is wrong); tell the user to fix `backend/.env` per the "Local setup" block in `docs/specs/SPEC-API-TICKETS.md`, STOP.
-2. Branch on `status` + `owner` — **only `TODO`+`AI` is processed**:
-   - `TODO` + `owner=AI` → claimable. Continue to step 3.
-   - `IN_PROGRESS` + `owner=AI` → already claimed (a previous run is running or stalled). Do NOT re-claim or change anything. Tell the user: "Ticket <id> is already In Arbeit (AI) — a previous run may still hold it. If it stalled, finish it or hand it back to a human on the board (`/admin/tickets/<id>`) before re-running." STOP.
-   - anything else (`DEFINITION`, `ON_HOLD`, `DONE`, or `owner=HUMAN`) → "Ticket <id> is <status> / <owner> — not Ready+AI, nothing to do." STOP.
-3. Set `user_description` = ticket `title` + two newlines + `body` (append the existing `comments` thread for context). Set `task_key = TICKET-<id>-<2–4 kebab words from the title, UPPERCASED, umlauts transliterated: ä→ae ö→oe ü→ue ß→ss>` (e.g. ticket 8 "Icons für Aktivitätstypen" → `TICKET-8-ICONS-FUER-AKTIVITAETSTYPEN`). Set `ticket_url`.
-
-### TM.2 — Claim → In Progress (run from Step 4.6, after the branch exists)
-
-1. `POST $ticket_api_base/api/tickets/<id>/start` → `IN_PROGRESS`. A `409` means it is no longer Ready+AI (someone claimed it since TM.1) — STOP and tell the user. (The branch/state file already created are harmless; the user can delete the branch.)
-2. On success set `config.ticket_claimed = true` in the state file (so the Quit hook and Step 8.2 know the ticket is live).
-3. Post the state-change comment via the admin session, e.g. `"Von der KI übernommen. Status → In Arbeit."` — append `" (Branch: <branch_name>)"` only when `is_git_repo`.
-
-### TM.3 — Finish → Done (run from Step 13.4, on success)
-
-`POST $ticket_api_base/api/tickets/<id>/done` with body `{"comment":"<2–3 sentence summary of the change + the PR link if one was created>"}`. Moves the ticket to `DONE` (`solution=DONE`); the `comment` is the state-change comment. **On failure** (`409` not IN_PROGRESS, `404`, `401`, or a network error — retry once on a transient network error): do NOT claim success — show the response and tell the user the ticket is still "In Arbeit" and needs manual completion. Reflect this in the Step 13.4 output.
-
-### TM.4 — Question / error → Blocked + Human (run on any unanswerable question or unrecoverable error while in ticket mode)
-
-`POST $ticket_api_base/api/tickets/<id>/ask` with body `{"question":"<the exact question or error text, plus what you already tried>"}`. This moves the ticket to `ON_HOLD` ("Wartet"), sets `owner=HUMAN`, and posts the text as an `AGENT` comment — the state-change comment **and** the reassignment to Human in a single call. Then STOP the skill. (This is for a genuine question or error — **not** a plain user Quit; see the Quit Pattern.)
+Call sites: Step 1 (TM.1 resolve), Step 4.6 (TM.2 claim), Step 8.2 (TM.4 blocked), Step 13.4 (TM.3 done).
 
 ---
 
@@ -302,7 +244,7 @@ Read `plan-and-do-modes.md` and execute matching section. STOP.
 
    **Path A — Freeform text** (non-empty):
    - Store as `user_description`
-   - **Ticket detection (see `## TICKET MODE`):** If the trimmed input is a ticket URL (`…/admin/tickets/<id>`) or a bare integer (`^\d+$`), set `ticket_mode = true`, then run **TM.1 (Resolve & verify)** now. TM.1 sets `user_description`, `task_key`, `ticket_id`, `ticket_url`. If TM.1 stops (not found, or not Ready+AI), STOP the whole skill. Otherwise skip the UPPERCASE-name extraction below (TM.1 already set `task_key`) and go straight to `branch_prefix`. Set `ticket_api_base` per the TICKET MODE config.
+   - **Ticket detection (read `plan-and-do-modes.md` → `## TICKET MODE`):** If the trimmed input is a ticket URL (`…/admin/tickets/<id>`) or a bare integer (`^\d+$`), set `ticket_mode = true`, then run **TM.1 (Resolve & verify)** from that file now. TM.1 sets `user_description`, `task_key`, `ticket_id`, `ticket_url`. If TM.1 stops (not found, or not Ready+AI), STOP the whole skill. Otherwise skip the UPPERCASE-name extraction below (TM.1 already set `task_key`) and go straight to `branch_prefix`. Set `ticket_api_base` per that file's TICKET MODE config.
    - **If not a ticket** (`ticket_mode = false`): Extract UPPERCASE task name (2-4 words, hyphenated). Example: "Add Redis caching" → "ADD-REDIS-CACHING"
    - Display understanding and key. Do NOT ask for approval — just show it and continue.
    - Set `branch_prefix` = lowercase task_key, `input_mode` = "freeform"
@@ -394,61 +336,15 @@ mkdir -p [docs_folder]/{prds,plans,state,reviews}
 
 Store paths: `prd_dir`, `plan_dir`, `state_dir`, `review_dir`.
 
-### Step 3.3: Initialize State File
+### Step 3.3: Load Config
 
-Write `[state_dir]/STATE-[task_key].json` using Write tool:
+Read `plan-and-do-setup.md` → `## CONFIG LOADING` and execute it now, before the state file gets written. This resolves `keep_settings`, `open_md_setting`, and `auto_open_md` so Step 3.4 never writes nulls for these config-derived state keys.
 
-```json
-{
-  "version": 1,
-  "task_key": "[task_key]",
-  "status": "in_progress",
-  "current_step": "3.3",
-  "started": "[ISO timestamp]",
-  "updated": "[ISO timestamp]",
-  "config": {
-    "input_mode": "freeform",
-    "user_description": "[user_description]",
-    "special_instructions": null,
-    "ticket_mode": false,
-    "ticket_id": null,
-    "ticket_url": null,
-    "ticket_api_base": null,
-    "ticket_claimed": false,
-    "branch_name": null,
-    "original_branch": null,
-    "original_head": null,
-    "docs_folder": "[docs_folder]",
-    "is_git_repo": true,
-    "workflow_scope": null,
-    "pr_prefix": null,
-    "pr_exists": null,
-    "pr_url": null
-  },
-  "discovery": {
-    "agents_available": false,
-    "writer_agents": [],
-    "coding_agents": [],
-    "review_agents": [],
-    "test_coding_agents": [],
-    "test_review_agents": [],
-    "test_runner_agents": [],
-    "tooling_coding_agents": [],
-    "tooling_review_agents": [],
-    "test_command": null
-  },
-  "artifacts": {
-    "prd_skipped": null,
-    "prd_file": null,
-    "plan_file": null
-  },
-  "completed_steps": []
-}
-```
+### Step 3.4: Initialize State File
 
-Do NOT git add/commit yet. File committed on new branch in Step 4.
+Write `[state_dir]/STATE-[task_key].json` using the Write tool, using the template in `plan-and-do-setup.md` → `## STATE FILE TEMPLATE`. Do NOT git add/commit yet. File committed on the new branch in Step 4.5.
 
-**Ticket mode:** when `ticket_mode = true` (TM.1 ran in Step 1), write the **real** resolved values into this file now — `ticket_mode: true` plus the actual `ticket_id`, `ticket_url`, and `ticket_api_base` — not the defaults above. These gates (`ticket_mode` especially) are re-read after context compression per `## Context Recovery`; if they stay `false`/`null` here, a compacted run silently loses ticket mode and the ticket is never marked Done or handed back.
+**Ticket mode:** when `ticket_mode = true` (TM.1 in `plan-and-do-modes.md` → `## TICKET MODE` ran in Step 1), write the **real** resolved values into this file now — see the ticket-mode note in `plan-and-do-setup.md` → `## STATE FILE TEMPLATE`.
 
 ---
 
@@ -529,7 +425,7 @@ git commit -m "docs: Initialize state tracking for [task_key]"
 
 **If `ticket_mode = false`:** Skip this step.
 
-**Otherwise:** Run **TM.2 (Claim → In Progress)** now — the branch exists (when `is_git_repo`), so the In-Progress comment can name it. This flips the ticket `TODO → IN_PROGRESS`, sets `ticket_claimed = true`, and posts the state-change comment. A `409` here means the ticket is no longer Ready+AI — STOP and tell the user.
+**Otherwise:** Run **TM.2 (Claim → In Progress)** from `plan-and-do-modes.md` → `## TICKET MODE` now — the branch exists (when `is_git_repo`), so the In-Progress comment can name it. This flips the ticket `TODO → IN_PROGRESS`, sets `ticket_claimed = true`, and posts the state-change comment. A `409` here means the ticket is no longer Ready+AI — STOP and tell the user.
 
 ---
 
@@ -562,10 +458,12 @@ Analyze user_description and codebase using Grep/Glob. Identify patterns, module
 
 **If agents_available:**
 
-1. **Draft:** Launch `ba-writer` (or first `writer_agent`) via Task tool to write the PRD. If no writer agents exist, use the first `coding_agent` instead. If no coding agents exist either, write the PRD directly. Provide user_description, codebase context from Step 6.1, and the structure below. Apply the **DISPATCH NARRATION RULE**.
-2. **Review:** Apply the **REVIEWER SCOPE FILTER** — for a PRD always include `ba-reviewer`, plus any domain reviewers whose area the PRD covers. Launch them in parallel via Task tool. Apply the DISPATCH NARRATION RULE. Each reviewer gets the draft PRD and checks for completeness, correctness, and feasibility from their domain perspective.
-3. **Fix:** Collect all reviewer findings. Fix issues automatically — no user prompt needed. If reviewers disagree, prefer the more conservative/thorough approach.
+1. **Draft:** Launch ONE agent via Task tool to write the PRD, in this order of preference: first `planner_agent`, else `ba-writer` (or first `writer_agent`), else first `coding_agent`, else write directly. Model: `opus` for a complex task, `sonnet` for a small one — never `haiku`. Provide user_description, codebase context from Step 6.1, and the structure below. Apply the **DISPATCH NARRATION RULE** (`plan-and-do-delegation.md` → `## 13. DISPATCH NARRATION RULE`).
+2. **Review:** Apply the **REVIEWER SCOPE FILTER** (`plan-and-do-delegation.md` → `## 14. REVIEWER SCOPE FILTER`) — for a PRD always include `ba-reviewer`, plus any domain reviewers whose area the PRD covers. Launch them in parallel via Task tool. Model: one tier below the draft, floor of `sonnet` for anything security- or architecture-relevant. Apply the DISPATCH NARRATION RULE from the same file. Each reviewer gets the draft PRD and checks for completeness, correctness, and feasibility from their domain perspective.
+3. **Fix:** Collect all reviewer findings. Delegate the fixes to the drafting agent with the findings in the prompt — no user prompt needed. Model: same tier as the draft. If reviewers disagree, prefer the more conservative/thorough approach. Fix directly only when `coding_agents` is empty or `agents_available == false`. Failed fixes run the escalation loop.
 4. **Result:** The reviewed and fixed PRD becomes the final draft for user approval.
+
+**Record:** log the draft, each reviewer, and the fix in `delegation.assignments` — step "PRD draft" / "PRD review: [agent]" / "PRD fix", agent, model, verification method.
 
 **Otherwise:** Write directly.
 
@@ -581,7 +479,7 @@ Write to `[prd_dir]/PRD-[task_key].md`. Store as `prd_file`.
 
 Update state: `current_step` = "6.4", set `artifacts.prd_file`.
 
-Display PRD content and full absolute file path. Call the `AskUserQuestion` tool with: 1-Continue, 2-Edit, 3-Quit. Wait for response — do not proceed until the user answers.
+Display PRD content and full absolute file path. Call the `AskUserQuestion` tool with: 1-Continue, 2-Edit, 3-Open in app, 4-Quit. Wait for response — do not proceed until the user answers.
 
 ### Step 6.5: Commit PRD
 
@@ -621,37 +519,9 @@ Create implementation tasks: file changes, tests, configuration, verification st
 
 ### Step 7.3: Generate Detailed Plan
 
-**If agents_available:**
+Read `plan-and-do-delegation.md` → `## 10. STEP 7.3: PLAN DRAFT/REVIEW/FIX CYCLE` and execute it. Short version: a planner writes the WHOLE plan in one dispatch — no merge needed. Without one, all `coding_agents` draft in parallel and the orchestrator merges. Review and fix run either way.
 
-1. **Draft:** Launch ALL `coding_agents` in parallel via Task tool. Each coder contributes plan tasks for their domain (backend, frontend, database, etc.). Provide PRD (if exists), user_description, codebase analysis, and the plan structure below.
-2. **Merge:** Combine all coder outputs into one coherent plan. Resolve overlaps and ensure consistent task ordering.
-3. **Review:** Launch ALL `review_agents` in parallel via Task tool. Each reviewer checks the merged plan for completeness, feasibility, missing edge cases, and correct task ordering from their domain perspective.
-4. **Fix:** Collect all reviewer findings. Fix issues automatically — no user prompt needed. If reviewers flag missing tasks or wrong ordering, update the plan.
-5. **Result:** The reviewed and fixed plan becomes the final draft for user approval.
-
-**Otherwise:** Write directly.
-
-Structure:
-```markdown
-# Implementation Plan: [task_key]
-
-## Test Command
-`[test_command]`
-
-## Tasks
-### 1. [Category]
-- [ ] Task items with specific details
-
-### 2. Test Implementation
-- [ ] Test cases
-
-### 3. Verification
-- [ ] Run tests, check formatting
-
-## Tests
-### Unit Tests / Integration Tests / Edge Cases
-- [ ] Specific test cases with what they verify
-```
+Plan structure: `plan-and-do-delegation.md` → `## 11. PLAN STRUCTURE (Step 7.3)`.
 
 ### Step 7.4: Write to File
 
@@ -671,9 +541,10 @@ Display plan content. Display artifact paths per the ARTIFACT PATH DISPLAY RULE.
    **If `pr_exists = true`: Approve, implement, review, and update PR** — Full workflow; the post-completion step updates the existing PR instead of creating one.
 4. **If `prd_skipped = true`: Create PRD first** — Discard the current draft plan, create a PRD (Step 6), then regenerate the plan (Step 7) with the PRD as input. **Omit this option entirely when `prd_skipped = false`.**
 5. **Edit** — Request changes to the plan.
-6. **Quit** — Execute Quit Pattern.
+6. **Open in app** — Open the plan (and PRD if it exists) per the OPEN IN APP RULE, then return to this checkpoint.
+7. **Quit** — Execute Quit Pattern.
 
-**Numbering:** When `prd_skipped = false`, omit option 4 entirely and present exactly five options with no gap — renumber so Edit = 4 and Quit = 5. When `prd_skipped = true`, present all six as numbered above. Always label each option by name as well as number so the mapping below stays unambiguous.
+**Numbering:** When `prd_skipped = false`, omit option 4 (Create PRD first) entirely and present exactly six options with no gap — renumber so Edit = 4, Open in app = 5, and Quit = 6. When `prd_skipped = true`, present all seven as numbered above: 1, 2, 3, 4-Create PRD, 5-Edit, 6-Open in app, 7-Quit. Always label each option by name as well as number so the mapping below stays unambiguous.
 
 Store the user's choice in state as `config.workflow_scope`:
 - Choice 1 → `"implement"`
@@ -681,6 +552,7 @@ Store the user's choice in state as `config.workflow_scope`:
 - Choice 3 → `"full"`, then **derive the PR prefix** (see below)
 - "Create PRD first" (only when `prd_skipped = true`) → set `prd_skipped = false`, update state (`artifacts.prd_skipped = false`). **If `is_git_repo`:** the draft plan was written in Step 7.4 but is only committed in Step 7.6, so it may be untracked — remove it safely: if `git ls-files --error-unmatch [plan_file]` succeeds (tracked), run `git rm [plan_file] && git commit -m "docs: Remove draft plan, creating PRD first. [task_key]"`; otherwise just `rm [plan_file]` (nothing to commit). Then go to STEP 6. After Step 6 completes, continue to Step 7.1 (re-run plan generation with the PRD as input) and return here.
 - Edit → call the `AskUserQuestion` tool to ask what changes are needed, apply them, re-display the plan, return to this checkpoint.
+- Open in app → open the plan (and PRD if it exists) per the OPEN IN APP RULE, then return to this checkpoint. Does not set any state.
 - Quit → execute Quit Pattern.
 
 **Auto-derive PR title prefix (Choice 3 only):** This lets the full workflow run uninterrupted through PR creation/update. Always derive — for both new and existing PRs — so the PR title is never malformed. Never ask the user.
@@ -690,6 +562,12 @@ Store the user's choice in state as `config.workflow_scope`:
 4. If no commits yet (e.g. a kept branch where the range is empty), all `docs:`, or no clear majority (including ties): default to `feat:`.
 
 Display: "PR prefix: [pr_prefix] (derived from commit history)." Store as `config.pr_prefix`.
+
+### Step 7.5b: File Cleanup Decision
+
+Runs once after scope selection at Step 7.5 — never re-runs after an Edit loop back to 7.5. Decision set: `plan`, `review`, `state`, plus `prd` when `prd_skipped == false`.
+
+Resolution logic and exact prompt shapes live in `plan-and-do-setup.md` → `## FILE CLEANUP DECISION (Step 7.5b)`. Result stored in state as `config.keep_files` — an OBJECT of booleans, one entry per file in the decision set.
 
 ### Step 7.6: Commit Plan
 
@@ -712,20 +590,13 @@ EOF
 
 ### Step 8.1: Execute Plan
 
-**If agents_available:** Dispatch task groups to coding agents via Task tool. Use this file-path → agent mapping (override only when CLAUDE.md says otherwise):
+**If agents_available AND `coding_agents` is not empty:**
 
-| File pattern | Agent |
-|--------------|-------|
-| `backend/src/routes/**`, `backend/src/services/**`, `backend/src/middleware/**`, `backend/src/app.ts`, `backend/src/utils/**` | `be-coder` |
-| `backend/src/db/**`, `backend/src/config/migrate.ts`, `backend/src/config/db.ts`, `backend/src/seed/**` | `db-coder` |
-| `frontend/src/app/features/**`, `frontend/src/app/core/**`, `frontend/src/app/app.*` | `fe-coder` |
-| `frontend/src/styles.scss`, `*.scss`, visual/template-only changes | `ui-designer` |
-| `**/*.py` | `python-coder` |
-| `**/*.sh`, `**/*.bash` | `shell-coder` |
-| `.claude/**` (skills, agents, prompts, settings) | `skill-coder` |
-| Anything else (config, scripts, docs) | nearest match by domain, else direct mode |
+Dispatch each task group to the agent and model that its `**Agent:**` / `**Model:**` lines name — the user approved those assignments at Step 7.5, follow them, do not re-decide. Apply the **DISPATCH NARRATION RULE** (`plan-and-do-delegation.md` → `## 13. DISPATCH NARRATION RULE`) before every Task call. Launch independent groups in parallel, in a single message with multiple Task calls. Serialize only when one group's output feeds another.
 
-Apply the **DISPATCH NARRATION RULE** before every Task call. Launch independent agents in parallel.
+**If the plan carries no `Agent:`/`Model:` lines** (a plan written before this feature): display "Plan has no agent assignments. Choosing per task group." Then pick the agent per `plan-and-do-delegation.md` → `## 15. FILE PATH → AGENT MAP (Step 8.1)` and the tier by difficulty per `## DELEGATION`. Never fail on this.
+
+Write each slice prompt to stand alone: exact file paths to touch, what to change, acceptance criteria, expected output format, what NOT to touch, and the Commit Scoping Rule (`git add [exact paths]`, never `git add -A`/`git add .`/`git commit -a`, and never `git push`). Also tell the agent not to run the project test suite — it reports what it changed, the orchestrator runs tests. **Exception:** test-runner dispatches (Step 9.1, Step 11.1) are exempt from the no-test-suite rule — running the suite is their entire purpose. Full contract in `plan-and-do-delegation.md` → `## 5. SLICE PROMPT CONTRACT`.
 
 Each agent commits the work it produced. **If `prd_file` exists**, the commit message MUST end with `PRD: [prd_file]` per CLAUDE.md:
 ```
@@ -735,11 +606,18 @@ PRD: [prd_file relative to repo root]
 ```
 Omit the `PRD:` footer when no PRD exists.
 
+**Record** each dispatch in state under `delegation.assignments`: task group, agent, model, verification method.
+
+**Verify every slice.** Read the diff at minimum, or delegate a review slice to the matching reviewer agent one tier below the coder. Do NOT run the test suite per slice — it runs once after a parallel group finishes, and again at Step 9. Never two test runs at once.
+
+**On failure, escalate:** two attempts per tier, then one tier up. You do the slice yourself only after `opus` fails twice — record it in `delegation.escalations` and flag it in the Step 13 summary. Full loop in `plan-and-do-delegation.md` → `## 8. ESCALATION LOOP`.
+
 **Phase review (agents_available only):** If the plan has multiple phases or numbered task groups, treat each group as a phase. After each phase completes:
-1. Apply the **REVIEWER SCOPE FILTER** — pick only the reviewers whose domain the phase touched. Launch them in parallel via Task tool. Apply the DISPATCH NARRATION RULE.
-2. Collect all reviewer findings. Fix issues automatically — no user prompt needed.
+1. Apply the **REVIEWER SCOPE FILTER** (`plan-and-do-delegation.md` → `## 14. REVIEWER SCOPE FILTER`) — pick only the reviewers whose domain the phase touched. Launch them in parallel via Task tool, each with an explicit model — one tier below the coder that did the phase, floor of `sonnet` for security or architecture. Apply the DISPATCH NARRATION RULE from the same file.
+2. Collect all reviewer findings. Delegate the fixes to the coding agent that owns the phase, with the findings in the prompt. Model: tier by severity — a typo is `haiku`, a security or design flaw is `opus`. Fix directly only when `coding_agents` is empty or `agents_available == false`. Failed fixes run the escalation loop.
 3. Commit fixes: `fix: Address phase [N] review findings. [task_key]` (with `PRD:` footer if applicable)
 4. Then proceed to the next phase.
+5. **Record** each reviewer and fix dispatch in `delegation.assignments` — step "Phase [N] review: [agent]" / "Phase [N] fix".
 
 This catches issues early, before they compound across phases.
 
@@ -748,9 +626,11 @@ This catches issues early, before they compound across phases.
 - Backend files changed → `be-test-coder` writes Playwright API tests under `backend/src/test/`
 - Frontend files changed → `fe-test-coder` writes Jasmine specs colocated with sources
 
-Apply the **DISPATCH NARRATION RULE**. Launch in parallel when both scopes are touched. Each agent commits its test files: `test: Add tests for [description]. [task_key]` (with `PRD:` footer if applicable).
+Model: default `sonnet`. `haiku` only for genuinely mechanical, spelled-out test edits. `opus` needs a named trigger — same triggers as Step 8.1 implementation slices: cross-cutting, unknown-cause, architecture, security.
 
-Then launch matching `test_review_agents` (`be-test-reviewer` / `fe-test-reviewer`) in parallel to review the new tests. Auto-fix findings and commit: `fix: Address test review findings. [task_key]`. No user prompt.
+Apply the **DISPATCH NARRATION RULE** (`plan-and-do-delegation.md` → `## 13. DISPATCH NARRATION RULE`). Launch in parallel when both scopes are touched. Each agent commits its test files: `test: Add tests for [description]. [task_key]` (with `PRD:` footer if applicable).
+
+Then launch matching `test_review_agents` (`be-test-reviewer` / `fe-test-reviewer`) in parallel to review the new tests. Model: one tier below the test author that wrote what they're reviewing, floor `sonnet` for security-relevant tests. Auto-fix findings and commit: `fix: Address test review findings. [task_key]`. No user prompt.
 
 Skip the test authoring phase when:
 - The plan explicitly marks the change as test-inappropriate (e.g., a pure docs edit)
@@ -769,7 +649,7 @@ For each task in PLAN:
 
 If questions arise: explain the issue, then call the `AskUserQuestion` tool with numbered alternatives.
 
-**Ticket mode:** If a blocking question cannot be answered or an error cannot be recovered (here or during testing in Step 9), run **TM.4 (Blocked + Human)** with that question/error as the text, then STOP. This is how a ticket-mode run "asks a question or runs into an error": comment + move to "Wartet" + reassign to Human.
+**Ticket mode:** If a blocking question cannot be answered or an error cannot be recovered (here or during testing in Step 9), run **TM.4 (Blocked + Human)** from `plan-and-do-modes.md` → `## TICKET MODE` with that question/error as the text, then STOP. This is how a ticket-mode run "asks a question or runs into an error": comment + move to "Wartet" + reassign to Human.
 
 ---
 
@@ -777,12 +657,12 @@ If questions arise: explain the issue, then call the `AskUserQuestion` tool with
 
 ### Step 9.1: Run Tests
 
-**If `test_runner_agents` is non-empty:** Launch each relevant runner in parallel via Task tool. Match by scope:
+**If `test_runner_agents` is non-empty:** Launch each relevant runner in parallel via Task tool, model: `haiku`. Match by scope:
 - Backend files changed → `be-test-runner`
 - Frontend files changed → `fe-test-runner`
 - Both scopes → launch both in parallel
 
-Apply the **DISPATCH NARRATION RULE**. Collect each runner's pass/fail report.
+Apply the **DISPATCH NARRATION RULE** (`plan-and-do-delegation.md` → `## 13. DISPATCH NARRATION RULE`). Collect each runner's pass/fail report.
 
 **Otherwise:** Execute `[test_command]` directly.
 
@@ -791,10 +671,11 @@ Apply the **DISPATCH NARRATION RULE**. Collect each runner's pass/fail report.
 **If tests pass:** Continue to Step 9.3.
 
 **If tests fail:**
-1. Show failures, attempt automatic fix (no prompt)
+1. Show failures. Delegate the fix to the coding agent that owns the failing code, at the tier the failure warrants — a clear one-line break is `haiku`, an unknown cause is `opus`. Fix directly only when `coding_agents` is empty or `agents_available == false`. Record the dispatch in `delegation.assignments` (step "Test fix", agent, model, verification).
 2. Commit fixes: `fix: Fix test failures. [task_key]`
 3. Re-run tests
-4. If still failing: show details, call the `AskUserQuestion` tool with: "What should I try next?" Apply guidance. Retry.
+4. **If still failing:** run the escalation loop — two attempts per tier, then one tier up (see `plan-and-do-delegation.md` → `## 8. ESCALATION LOOP`). Record escalations in `delegation.escalations`.
+5. **Only after the escalation loop is exhausted** (`opus` failed twice): show details, call the `AskUserQuestion` tool with: "What should I try next?" Apply guidance. Retry. **Never ask on the first failure.**
 
 ### Step 9.3: Implementation Complete — Auto-Advance
 
@@ -848,10 +729,11 @@ Display artifact paths per the ARTIFACT PATH DISPLAY RULE.
 **If no issues:** Continue without prompting.
 
 **If issues found:**
-- `workflow_scope == "full"` AND this is the first review round → Auto-fix, commit `fix: Address code review findings. [task_key]` (with `PRD:` footer if applicable), re-run `/project:review`, return to 10.2. No prompt.
-- Second review round, OR `workflow_scope == "implement-review"`, OR the same finding survives → Call the `AskUserQuestion` tool with: 1-Fix findings, 2-Skip to summary, 3-Quit.
-  - Fix → fix issues, commit, re-run `/project:review`, return to 10.2
+- `workflow_scope == "full"` AND this is the first review round → Auto-fix: delegate each finding to the coding agent that owns the file, tier by severity (a typo is `haiku`, a security or design flaw is `opus`). Group findings by agent and launch in parallel via Task tool. Fix directly only when `coding_agents` is empty or `agents_available == false`. Failed fixes run the escalation loop. Record each dispatch in `delegation.assignments` (step "Review fix: [file]"). Commit `fix: Address code review findings. [task_key]` (with `PRD:` footer if applicable), re-run `/project:review`, return to 10.2. No prompt.
+- Second review round, OR `workflow_scope == "implement-review"`, OR the same finding survives → Call the `AskUserQuestion` tool with: 1-Fix findings, 2-Skip to summary, 3-Open review in app, 4-Quit.
+  - Fix → delegate each finding to the coding agent that owns the file, tier by severity (a typo is `haiku`, a security or design flaw is `opus`). Group findings by agent and launch in parallel. Fix directly only when `coding_agents` is empty or `agents_available == false`. Failed fixes run the escalation loop. Record each dispatch in `delegation.assignments` (step "Review fix: [file]"). Commit, re-run `/project:review`, return to 10.2.
   - Skip → continue
+  - Open → open `[review_dir]/REVIEW-*.md` per the OPEN IN APP RULE, then return to this checkpoint
 
 **After Checkpoint 10 resolves (no issues or user chose Skip):** If `workflow_scope == "implement-review"`, skip to STEP 13 (summary). Do not ask — the user already chose this scope at plan approval.
 
@@ -863,10 +745,10 @@ Display artifact paths per the ARTIFACT PATH DISPLAY RULE.
 
 Code review may have changed implementation or test code. Re-run the relevant runners once to confirm the suite is still green.
 
-**If `test_runner_agents` is non-empty:** Launch the same runners as Step 9.1 (match by scope) in parallel via Task tool. Apply the **DISPATCH NARRATION RULE**.
+**If `test_runner_agents` is non-empty:** Launch the same runners as Step 9.1 (match by scope) in parallel via Task tool, model: `haiku`. Apply the **DISPATCH NARRATION RULE** (`plan-and-do-delegation.md` → `## 13. DISPATCH NARRATION RULE`). Record the dispatch in `delegation.assignments` (step "Post-review testing: [agent]").
 
 - All pass → continue to STEP 12
-- Any fail → auto-fix the smallest case, commit `fix: Restore green tests after review. [task_key]`, re-run once. If still failing, surface the report and call the `AskUserQuestion` tool with: 1-Investigate (returns to STEP 8), 2-Skip to summary, 3-Quit.
+- Any fail → delegate the fix to the coding agent that owns the failing code, at the tier the failure warrants — a clear one-line break is `haiku`, an unknown cause is `opus`. Fix directly only when `coding_agents` is empty or `agents_available == false`. Record the dispatch in `delegation.assignments`. Commit `fix: Restore green tests after review. [task_key]`, re-run once. If still failing, surface the report and call the `AskUserQuestion` tool with: 1-Investigate (returns to STEP 8), 2-Skip to summary, 3-Quit. (This one-retry-then-ask flow is intentional, not a missing escalation ladder — Step 11.1 does not run the full two-attempts-per-tier loop from `## 8. ESCALATION LOOP` that Step 8.1/9.2 use. This step already had a working fix-and-recheck mechanism before the delegation feature existed, and PRD R9 chose to leave it unchanged rather than fold it into the ladder.)
 
 **Otherwise (no agents):** Re-run `[test_command]` directly. Same fail-handling as above.
 
@@ -874,67 +756,30 @@ Code review may have changed implementation or test code. Re-run the relevant ru
 
 **This is NOT a user checkpoint. Never call AskUserQuestion here.**
 
-Update state: `current_step` = "11.2". → STEP 12.
+Update state: `current_step` = "11.2". → STEP 12. Step 12's full body lives in `plan-and-do-modes.md` → `## STEP 12: DOCUMENTATION UPDATES` — read it there.
 
 ---
 
 ## STEP 12: DOCUMENTATION UPDATES
 
-Reached only for `workflow_scope == "full"` — Steps 9.3 and 10.3 route the other scopes straight to Step 13. So the doc sync runs on the full path, right before the PR is opened.
-
-This step syncs the project docs (`.claude/agents/`, `docs/specs/`, `CLAUDE.md`) with the code this run produced. It runs **before** PR creation (POST-COMPLETION PC.2).
-
-The `update-claude-files` skill owns this sync. It scopes to the branch's changes and requires the project's agent roster.
-
-### Step 12.1: Run the doc-sync skill
-
-**If `agents_available` and `is_git_repo`:** Invoke the skill in embedded mode, scoped to the branch. Substitute the real SHA from `config.original_head`:
-```
-/project:update-claude-files "embedded base:[original_head]"
-```
-**Always invoke the project skill `project:update-claude-files`** — never a plugin or global skill of the same base name (e.g. `bpf:update-claude-files`). The `project:` prefix is required to disambiguate.
-
-Wait for completion. The skill writes `docs/state/UPDATE-CLAUDE-FILES-RESULT.md` (gitignored). It never prompts and never blocks.
-
-**If `is_git_repo` but NOT `agents_available`:** Skip the skill. Display:
-```
-No agents found — skipping doc sync.
-Install the agents first: https://github.com/atra-consulting/coding-with-ai-lab/tree/main/.claude/agents
-```
-Continue to Step 12.3 (do not block the PR).
-
-**If NOT `is_git_repo`:** Direct fallback — scan `CLAUDE.md` and `docs/specs/` for updates the implementation made necessary, and apply them directly (no branch diff available). Skip the result-file logic below.
-
-### Step 12.2: Commit the result
-
-**Only when the skill ran in Step 12.1 (`agents_available` and `is_git_repo`):**
-
-Read `docs/state/UPDATE-CLAUDE-FILES-RESULT.md`. Act on its `status`:
-- `status: updated` → Display "Applying documentation updates: [files from result]." Stage only the changed docs (`git add .claude/agents docs/specs CLAUDE.md`) and commit `docs: Update project documentation. [task_key]` (with `PRD:` footer when `prd_file` exists). Do NOT stage the result file — it is gitignored.
-- `status: no-changes` → Display "No documentation updates needed." Commit nothing.
-- `status: skipped-no-agents` or `status: error` → Display the note from the result file. Commit nothing. Continue — never block the PR.
-
-### Step 12.3: Advance to Summary
-
-**This is NOT a user checkpoint. Never call AskUserQuestion here.**
-
-Update state: `current_step` = "12.3". → STEP 13.
+Runs only for `workflow_scope == "full"`, right after Step 11.2.
+Full step body lives in `plan-and-do-modes.md` → `## STEP 12: DOCUMENTATION UPDATES`. Step 12.3 (in that file) advances to Step 13.
 
 ---
 
 ## STEP 13: SUMMARY
 
-### Step 13.0: Planning Files
+### Step 13.0: Cleanup Planning Files
 
-Planning files (PRD, plan, state) stay in `[docs_folder]/` by default — they document why the change happened. Display the full absolute paths in the summary below so the user can delete manually if desired:
+Use `config.keep_files` from Step 7.5b. No prompt — the user already decided.
 
-```
-rm [prd_file] [plan_file] [state_file]
-```
+Resolve and delete per `plan-and-do-setup.md` → `## CLEANUP RESOLUTION (Step 13.0)`. The review file resolves by `REVIEW-[branch_name].md`, NOT by task key. The state file is NOT touched here — it survives this step and is only deleted later, in Step 13.2 (below), which is fully self-contained.
 
-No prompt — the user can clean up later if they want.
+Display the full absolute path of every file kept.
 
 ### Step 13.1: Display Summary
+
+The table below gets one row per dispatch recorded in `delegation.assignments`, in run order.
 
 ```
 === Implementation Summary ===
@@ -946,11 +791,19 @@ Files Changed: [count]
 Commits Created: [count]
 Tests: [passed/failed counts]
 Code Review: [issues found/no issues]
-Agents Used: [list or "None (direct mode)"]
 
-[If PRD exists]: Specifications: [full absolute path to prd_file]
-Plan: [full absolute path to plan_file]
-State: [full absolute path to state_file]
+Agents & Models Used: [table below, or "None (direct mode)"]
+
+| Step | Agent | Model | Verified by | Escalated |
+|------|-------|-------|-------------|-----------|
+| [e.g. "PRD draft", "PRD review: ba-reviewer", "Plan fix", "Implementation: [task group]", "Phase [N] review: [agent]", "Test fix", "Review fix: [file]", "Post-review testing: [agent]"] | [agent] | [tier] | [diff read / reviewer / tests / n/a] | [no, or "haiku -> sonnet"] |
+
+[If any slice ran directly after opus failed twice, say so here.]
+
+[If PRD exists and kept]: Specifications: [full absolute path to prd_file]
+[If plan kept]: Plan: [full absolute path to plan_file]
+[If review kept]: Review: [full absolute path to review file]
+[If state kept]: State: [full absolute path to state_file]
 [If ticket_mode]: Ticket: [ticket_url]  (final ticket status set in Step 13.4)
 
 Commits:
@@ -962,7 +815,11 @@ Next Steps:
 
 ### Step 13.2: Mark State Complete
 
-If state file exists: update `status` = "completed", commit.
+**If `is_git_repo`:** If state file exists: update `status` = "completed", commit. **Then, only after that commit:** if `config.keep_files.state == false`, delete the state file now (`git rm` for a tracked file, `rm -f` as a fallback) and commit: `docs: Remove state file. [task_key]`. If `config.keep_files.state` is `true`, or missing, keep the state file. No action needed.
+
+**If NOT `is_git_repo`:** If state file exists: update `status` = "completed" (no commit — nothing to commit to). If `config.keep_files.state == false`, delete the state file with plain `rm -f` — no `git rm`, no commit. Otherwise keep it.
+
+Nothing after this step may assume the state file still exists.
 
 ### Step 13.3: Post-Completion Workflow
 
@@ -970,34 +827,12 @@ Read `plan-and-do-modes.md` and execute "POST-COMPLETION WORKFLOW" section. This
 
 **CRITICAL:** PRs MUST target `original_branch` (the branch active when the skill started, stored in state file `config.original_branch`). Never default to main/master.
 
-**Ticket mode — do not stop yet.** The POST-COMPLETION WORKFLOW ends with "STOP — workflow complete" (`plan-and-do-modes.md`, PC.5). When `ticket_mode = true`, treat that terminal STOP as "return here": note the `pr_url` / `pr_merged` it set, then **continue to Step 13.4** to mark the ticket Done before the skill actually ends. In non-ticket mode, PC.5's STOP is final as before.
+**Ticket mode — do not stop yet.** The POST-COMPLETION WORKFLOW ends with "STOP — workflow complete" (`plan-and-do-modes.md`, PC.5). When `ticket_mode = true`, treat that terminal STOP as "return here": note the `pr_url` / `pr_merged` it set, then **continue to Step 13.4** to mark the ticket Done (TM.3 in the same file, `## TICKET MODE`) before the skill actually ends. In non-ticket mode, PC.5's STOP is final as before.
 
 ### Step 13.4: Finish Ticket (ticket mode only)
 
 **If `ticket_mode = false`:** Skip this step.
 
-**If `ticket_mode = true`:** Run **TM.3 (Finish → Done)** — the last step, so any PR created in Step 13.3 is already known and its URL goes into the Done comment. This moves the ticket to `DONE` ("Erledigt"). Run this on any successful completion regardless of `workflow_scope`. If the run ended by asking a question or hitting an unrecoverable error, TM.4 (Blocked + Human) already ran instead — do **not** also mark it Done.
+**If `ticket_mode = true`:** Run **TM.3 (Finish → Done)** from `plan-and-do-modes.md` → `## TICKET MODE` — the last step, so any PR created in Step 13.3 is already known and its URL goes into the Done comment. This moves the ticket to `DONE` ("Erledigt"). Run this on any successful completion regardless of `workflow_scope`. If the run ended by asking a question or hitting an unrecoverable error, TM.4 (Blocked + Human) already ran instead — do **not** also mark it Done.
 
-Then display the final ticket status: on success `Ticket <id> → Erledigt (Done): [ticket_url]`; if TM.3 failed, `Ticket <id> still In Arbeit — mark Done manually: [ticket_url]`.
-
----
-
-## Success Criteria
-
-- Branch always created when git available (original branch stays clean)
-- State file tracks progress; committed at init, pause, and completion only
-- PRD created or explicitly skipped
-- Detailed plan created with test cases
-- Implementation matches plan; tests pass
-- Code review via /project:review completed
-- No uncommitted changes when skill finishes
-- Agents used when available (fallback to direct mode)
-
----
-
-## References
-
-- Specifications (PRD): `[docs]/prds/PRD-[task_key].md`
-- Detailed Plan: `[docs]/plans/PLAN-[task_key].md`
-- State: `[docs]/state/STATE-[task_key].json`
-- Review: `[docs]/reviews/REVIEW-*.md`
+Then display the final ticket status: on success `Ticket <id> → Erledigt (Done): [ticket_url]`; if that Done call failed, `Ticket <id> still In Arbeit — mark Done manually: [ticket_url]`.
