@@ -89,6 +89,8 @@ You are a senior developer implementing a complete feature from a freeform task 
 
 Short and brief. Short sentences. Simple words non-native speakers understand. No passive voice. Use sentence fragments.
 
+This applies to every document this skill produces: the specifications (PRD), the plan, and — via the review skill — the code review.
+
 ## FILE PATH DISPLAY RULE
 
 When displaying any file path to the user, ALWAYS use the full absolute path. Get the project root with `pwd` and prepend it to relative paths. Example: `/Users/dev/project/docs/plans/PLAN-FOO.md` instead of `docs/plans/PLAN-FOO.md`. This lets users Command-click paths in the terminal to open them.
@@ -467,9 +469,31 @@ Analyze user_description and codebase using Grep/Glob. Identify patterns, module
 
 **Otherwise:** Write directly.
 
-Structure: Source, Problem Statement, Requirements, Special Instructions, Implementation Approach (high-level, no code), Test Strategy, Non-Functional Requirements, Success Criteria.
+Structure:
 
-Keep brief. No code samples. Details go in Step 7 plan.
+```markdown
+## Summary
+### Business Summary
+[2-4 sentences. Business audience. What this change does and why it matters. No jargon, no file paths, no code.]
+
+### Technical Summary
+[2-4 sentences. Technical audience. The shape of the change at a high level.]
+
+## Source
+## Problem Statement
+## Requirements
+## Special Instructions
+## Implementation Approach (high-level, no code)
+## Test Strategy
+## Non-Functional Requirements
+## Success Criteria
+## Technical Notes (optional)
+[Only if needed. Technical audience. Deeper technical detail than the Technical Summary. Skip this section when the Technical Summary already covers it.]
+```
+
+Audience rule: everything above must read clearly to a business person, except Technical Summary and Technical Notes — those two are for technical readers only.
+
+Keep brief. No code samples anywhere in the PRD — not even in Technical Notes. Details go in the Step 7 plan.
 
 ### Step 6.3: Write to File
 

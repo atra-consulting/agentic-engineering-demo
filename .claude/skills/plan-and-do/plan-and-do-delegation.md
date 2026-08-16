@@ -205,7 +205,7 @@ A Markdown document. A specification, or an implementation plan. Nothing else.
 
 You have no Write and no Edit tool. That is on purpose. You cannot touch source files, and you should not want to. Your job ends when the document is good. Someone else builds it.
 
-Every document opens with a `## Summary`. PRD — 2–4 sentences, business audience. Plan — 2–5 sentences, technical audience, followed by a `## Business Summary` section — 2–4 sentences, business audience.
+Every document opens with `## Summary`, containing `### Business Summary` first (2–4 sentences, business audience — no jargon, no file paths, no code), then `### Technical Summary` second (technical audience only — 2-4 sentences for a PRD, 2-5 sentences for a plan). PRD — everything else stays business-readable, except Technical Summary and an optional trailing `## Technical Notes` section, both for technical readers only. Plan — everything else is technical-only; only the Business Summary needs to make sense to a business person.
 
 ## Step 1 — Read the codebase first
 
@@ -297,7 +297,7 @@ Writing your own instead of copying? Cover all eight of these. Miss one and the 
 - [ ] **It marks which task groups run in parallel** and which must serialize.
 - [ ] **It states acceptance criteria per group.**
 - [ ] **It flags unknowns** instead of inventing answers.
-- [ ] **Every document opens with a `## Summary`** — PRD business audience, plan technical audience — and a plan also carries a `## Business Summary` section right after it, business audience.
+- [ ] **Every document opens with `## Summary`: `### Business Summary` first, `### Technical Summary` second.** PRD stays business-readable except Technical Summary and an optional Technical Notes section. Plan is technical-only except its Business Summary.
 
 The task-group format the planner must produce:
 
@@ -378,10 +378,11 @@ In direct mode, write `**Agent:** direct` and `**Model:** n/a` so the format sta
 # Implementation Plan: [task_key]
 
 ## Summary
-[2-5 sentences, technical audience: what gets built or changed, the shape of the approach, the main risk or constraint.]
-
-## Business Summary
+### Business Summary
 [2-4 sentences, business audience: what this plan accomplishes and why it matters. No jargon, no file paths, no code.]
+
+### Technical Summary
+[2-5 sentences, technical audience: what gets built or changed, the shape of the approach, the main risk or constraint.]
 
 ## Test Command
 `[test_command]`
@@ -413,6 +414,8 @@ In direct mode, write `**Agent:** direct` and `**Model:** n/a` so the format sta
 The `**Agent:**` and `**Model:**` lines are the whole point. Step 8.1 reads them and dispatches accordingly. Without them Step 8.1 falls back to choosing per task group — it still works, just without user review of the tier choices.
 
 In direct mode, write `**Agent:** direct` and `**Model:** n/a` so the format stays consistent.
+
+Audience rule: apart from the Business Summary, nothing else in the plan needs to make sense to a business person.
 
 ---
 
