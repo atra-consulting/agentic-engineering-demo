@@ -378,10 +378,11 @@ In direct mode, write `**Agent:** direct` and `**Model:** n/a` so the format sta
 # Implementation Plan: [task_key]
 
 ## Summary
-[2-5 sentences, technical audience: what gets built or changed, the shape of the approach, the main risk or constraint.]
-
-## Business Summary
+### Business Summary
 [2-4 sentences, business audience: what this plan accomplishes and why it matters. No jargon, no file paths, no code.]
+
+### Technical Summary
+[2-5 sentences, technical audience: what gets built or changed, the shape of the approach, the main risk or constraint.]
 
 ## Test Command
 `[test_command]`
@@ -413,6 +414,8 @@ In direct mode, write `**Agent:** direct` and `**Model:** n/a` so the format sta
 The `**Agent:**` and `**Model:**` lines are the whole point. Step 8.1 reads them and dispatches accordingly. Without them Step 8.1 falls back to choosing per task group — it still works, just without user review of the tier choices.
 
 In direct mode, write `**Agent:** direct` and `**Model:** n/a` so the format stays consistent.
+
+Audience rule: apart from the Business Summary, nothing else in the plan needs to make sense to a business person.
 
 ---
 
