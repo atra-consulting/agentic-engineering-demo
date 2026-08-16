@@ -2,7 +2,7 @@
   "version": 1,
   "task_key": "ADD-PRD-PLAN-SUMMARIES",
   "status": "in_progress",
-  "current_step": "3.4",
+  "current_step": "7.5",
   "started": "2026-08-16T00:00:00Z",
   "updated": "2026-08-16T00:00:00Z",
   "config": {
@@ -19,8 +19,8 @@
     "original_head": "1a5889ec4b377e41d37020132e08c0a6ec13842c",
     "docs_folder": "docs",
     "is_git_repo": true,
-    "workflow_scope": null,
-    "pr_prefix": null,
+    "workflow_scope": "full",
+    "pr_prefix": "feat:",
     "pr_exists": false,
     "pr_url": null,
     "keep_settings": {
@@ -29,30 +29,34 @@
       "review": "always",
       "state": "never"
     },
-    "keep_files": null,
+    "keep_files": { "plan": true, "review": true, "state": false },
     "open_md_setting": "never",
     "auto_open_md": false
   },
   "discovery": {
-    "agents_available": false,
-    "planner_agents": [],
-    "writer_agents": [],
-    "coding_agents": [],
-    "review_agents": [],
-    "test_coding_agents": [],
-    "test_review_agents": [],
-    "test_runner_agents": [],
-    "tooling_coding_agents": [],
-    "tooling_review_agents": [],
-    "test_command": null
+    "agents_available": true,
+    "planner_agents": ["planner"],
+    "writer_agents": ["ba-writer"],
+    "coding_agents": ["be-coder", "db-coder", "fe-coder", "ui-designer"],
+    "review_agents": ["ba-reviewer", "requirements-reviewer", "be-reviewer", "db-reviewer", "fe-reviewer", "ui-reviewer"],
+    "test_coding_agents": ["be-test-coder", "fe-test-coder"],
+    "test_review_agents": ["be-test-reviewer", "fe-test-reviewer"],
+    "test_runner_agents": ["be-test-runner", "fe-test-runner"],
+    "tooling_coding_agents": ["python-coder", "shell-coder", "skill-coder"],
+    "tooling_review_agents": ["python-reviewer", "shell-reviewer", "skill-reviewer"],
+    "test_command": "N/A - docs-only change, testing skipped per user choice"
   },
   "artifacts": {
-    "prd_skipped": null,
+    "prd_skipped": true,
     "prd_file": null,
-    "plan_file": null
+    "plan_file": "docs/plans/PLAN-ADD-PRD-PLAN-SUMMARIES.md"
   },
   "delegation": {
-    "assignments": [],
+    "assignments": [
+      { "step": "Plan draft", "agent": "planner", "model": "sonnet", "verification": "orchestrator read + transcribed to file" },
+      { "step": "Plan review: ba-reviewer", "agent": "ba-reviewer", "model": "haiku", "verification": "reviewer report read" },
+      { "step": "Plan fix", "agent": "orchestrator (planner has no write access)", "model": "sonnet", "verification": "orchestrator applied reviewer findings directly to plan file" }
+    ],
     "escalations": []
   },
   "completed_steps": []
