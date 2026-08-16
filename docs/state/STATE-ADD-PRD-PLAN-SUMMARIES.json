@@ -2,12 +2,12 @@
   "version": 1,
   "task_key": "ADD-PRD-PLAN-SUMMARIES",
   "status": "in_progress",
-  "current_step": "7.5",
+  "current_step": "9.3",
   "started": "2026-08-16T00:00:00Z",
   "updated": "2026-08-16T00:00:00Z",
   "config": {
     "input_mode": "freeform",
-    "user_description": "Update .claude/skills/plan-and-do/SKILL.md (and related reference files) so PRDs, plans, and reviews all start with a summary: business section first, then technical section. Business summary must be understandable by business people; technical summary only by technical people. PRD is written for business people (may end with a high-level technical section). Plan is written for technical people only, apart from its business summary section. Enforce the existing brief/short-sentence writing style for PRDs, plans, AND reviews.",
+    "user_description": "Update .claude/skills/plan-and-do/SKILL.md (and related reference files) so PRDs and plans (NOT reviews) start with a summary: business section first, then technical section. Business summary must be understandable by business people; technical summary only by technical people. PRD is written for business people (may end with a high-level technical section). Plan is written for technical people only, apart from its business summary section. Separately, enforce the existing brief/short-sentence writing style for PRDs, plans, AND reviews (reviews get only this writing-style scope note, not the business/technical summary split).",
     "special_instructions": null,
     "ticket_mode": false,
     "ticket_id": null,
@@ -55,9 +55,13 @@
     "assignments": [
       { "step": "Plan draft", "agent": "planner", "model": "sonnet", "verification": "orchestrator read + transcribed to file" },
       { "step": "Plan review: ba-reviewer", "agent": "ba-reviewer", "model": "haiku", "verification": "reviewer report read" },
-      { "step": "Plan fix", "agent": "orchestrator (planner has no write access)", "model": "sonnet", "verification": "orchestrator applied reviewer findings directly to plan file" }
+      { "step": "Plan fix", "agent": "orchestrator (planner has no write access)", "model": "sonnet", "verification": "orchestrator applied reviewer findings directly to plan file" },
+      { "step": "Implementation: Update plan-and-do skill templates and the planner agent spec", "agent": "skill-coder", "model": "sonnet", "verification": "commit 5caae9f, diff summary read" },
+      { "step": "Verification (Task 2)", "agent": "skill-coder", "model": "haiku", "verification": "6/6 checks pass" },
+      { "step": "Phase 1 review: skill-reviewer", "agent": "skill-reviewer", "model": "haiku", "verification": "reviewer report read, no blocking issues" },
+      { "step": "Phase 1 fix", "agent": "skill-coder", "model": "haiku", "verification": "commit eb08277, diff read" }
     ],
     "escalations": []
   },
-  "completed_steps": []
+  "completed_steps": ["1", "2", "2.1", "3", "4", "5.1", "7", "8.1"]
 }
