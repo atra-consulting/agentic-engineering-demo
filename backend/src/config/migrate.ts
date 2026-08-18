@@ -284,7 +284,9 @@ export async function runMigrations(): Promise<void> {
   // Idempotent data seed: agent tasks are inserted on every deployment via
   // INSERT OR IGNORE so they are always present (Vercel/Turso included),
   // independent of the firma-empty guard in runDataMigration(). Existing rows
-  // (e.g. DONE/REJECTED/IN_PROGRESS) are never overwritten.
+  // (e.g. DONE/REJECTED/IN_PROGRESS) are never overwritten — except task #23's
+  // title, which seedAgentTasks() corrects on every startup via a standing
+  // overwrite (same pattern as szenarioSeed.ts's seedSzenario()).
   await seedAgentTasks();
   await ensureTicketFullyReadyColumn();
   await seedTickets();

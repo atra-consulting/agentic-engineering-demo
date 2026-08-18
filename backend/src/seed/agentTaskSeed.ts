@@ -305,7 +305,7 @@ export const AGENT_TASK_SEED: AgentTaskSeedRow[] = [
   {
     id: 23,
     source: 'EMAIL',
-    title: 'Improve chances',
+    title: 'Chancen verbessern',
     body: 'Ich möchte zu einer Chance eine einfache, freie Notiz schreiben. Es gibt schon ein Beschreiibungs-Feld - ich will trotzdem ein neues Feld. Ein mehrzeiliges Textfeld reicht, bearbeitbar beim Anlegen und Ändern. Pflicht ist es nicht. Bitte nichts Kompliziertes, keine Formatierung oder Verknüpfungen. Außerdem soll das \'Phase\'-Label in der Chancen-Liste genauso wie in der Detail-Ansicht aussehen.',
     status: 'OPEN',
     comment: null,
@@ -329,5 +329,15 @@ export async function seedAgentTasks(): Promise<void> {
 
   await client.batch(stmts, 'write');
 
-  console.log(`=== Seeder: agent_task ensured (${AGENT_TASK_SEED.length} rows, INSERT OR IGNORE) ===`);
+  // Permanent, standing overwrite — NOT a one-shot migration. Runs unconditionally on
+  // every startup to keep agent_task #23's title pinned to the current canonical value,
+  // since INSERT OR IGNORE never touches an already-seeded row.
+  await client.execute({
+    sql: `UPDATE agent_task SET title=@title WHERE id=23`,
+    args: { title: 'Chancen verbessern' },
+  });
+
+  console.log(
+    `=== Seeder: agent_task ensured (${AGENT_TASK_SEED.length} rows, INSERT OR IGNORE + #23 title correction) ===`
+  );
 }
