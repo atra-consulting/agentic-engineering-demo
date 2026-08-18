@@ -186,6 +186,11 @@ describe('TicketBoardComponent — template rendering', () => {
     expect(definitionColumn.textContent).toContain('Ticket 0');
   });
 
+  it('renders the ticket number prefix on a card in the Definition column', () => {
+    const definitionColumn: HTMLElement = fixture.nativeElement.querySelector('#list-DEFINITION');
+    expect(definitionColumn.textContent).toContain('#0');
+  });
+
   it('renders the "Bereit" column header for the TODO column', () => {
     const header: HTMLElement = fixture.nativeElement.querySelector('.column-todo .column-title');
     expect(header).toBeTruthy();
