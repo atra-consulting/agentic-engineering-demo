@@ -13,10 +13,14 @@
  * Also verifies the AGENT_TASK_SEED source data directly (not via the live
  * DB) for row id 23 — see the 'AGENT_TASK_SEED source data' suite below. On a
  * shared dev DB that was already seeded before row 23 was reworded,
- * INSERT OR IGNORE means the live row will keep its old values forever, so a
- * live-DB assertion on the new title/subject would be flaky. Asserting
- * against the exported constant instead is deterministic regardless of what
- * is currently in any given SQLite file.
+ * INSERT OR IGNORE means the live row will keep its old `body`/`metadata`
+ * values forever, so a live-DB assertion on those fields would be flaky.
+ * Asserting against the exported constant instead is deterministic
+ * regardless of what is currently in any given SQLite file. The `title`
+ * field is the one exception: `seedAgentTasks()` also runs a standing
+ * `UPDATE ... WHERE id=23` that pins the title on every call, so a live-DB
+ * assertion on the title is safe — see the "re-applies the standing title
+ * overwrite" case in the idempotent-seeder suite below.
  *
  * Test isolation notes
  * --------------------
@@ -55,6 +59,16 @@ async function getAgentTaskStatus(id: number): Promise<string> {
   const row = result.rows[0];
   if (!row) throw new Error(`getAgentTaskStatus: id ${id} not found`);
   return String(row['status']);
+}
+
+async function getAgentTaskTitle(id: number): Promise<string> {
+  const result = await client.execute({
+    sql: 'SELECT title FROM agent_task WHERE id = ?',
+    args: [id],
+  });
+  const row = result.rows[0];
+  if (!row) throw new Error(`getAgentTaskTitle: id ${id} not found`);
+  return String(row['title']);
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +158,44 @@ test.describe.serial('seedAgentTasks — idempotent seeder', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Case 3b: Re-applies the standing title overwrite for id=23 (mirror image
+  // of case 3 above — unlike id=1's status, id=23's title IS reset on re-seed
+  // because seedAgentTasks() runs a standing UPDATE ... WHERE id=23 on every
+  // call, on top of the INSERT OR IGNORE).
+  // -------------------------------------------------------------------------
+  test('re-applies the standing title overwrite: mutated id=23 title reverts on re-seed', async () => {
+    await test.step('ensure rows are seeded (in case prior test left them)', async () => {
+      // idempotent — safe to call even if rows exist
+      await seedAgentTasks();
+      const count = await countRows('agent_task');
+      expect(count).toBe(23);
+    });
+
+    await test.step('mutate id=23: set title to a different string', async () => {
+      await client.execute({
+        sql: "UPDATE agent_task SET title = 'Some other title' WHERE id = 23",
+        args: [],
+      });
+      const title = await getAgentTaskTitle(23);
+      expect(title).toBe('Some other title');
+    });
+
+    await test.step('re-run seedAgentTasks()', async () => {
+      await seedAgentTasks();
+    });
+
+    await test.step('id=23 title reverted to the canonical value (standing overwrite ran)', async () => {
+      const title = await getAgentTaskTitle(23);
+      expect(title).toBe('Chancen verbessern');
+    });
+
+    await test.step('total row count is still 23', async () => {
+      const count = await countRows('agent_task');
+      expect(count).toBe(23);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Case 4 (optional): All 4 sources present with exactly 4 rows each
   // -------------------------------------------------------------------------
   test('clean seed: all 4 sources present with correct row counts', async () => {
@@ -198,7 +250,7 @@ test.describe('AGENT_TASK_SEED source data — row id 23', () => {
       throw new Error('AGENT_TASK_SEED has no row with id 23');
     }
 
-    expect(row23.title).toBe('Improve chances');
+    expect(row23.title).toBe('Chancen verbessern');
 
     expect(typeof row23.metadata).toBe('string');
     const metadata = JSON.parse(row23.metadata as string) as { subject?: string };
