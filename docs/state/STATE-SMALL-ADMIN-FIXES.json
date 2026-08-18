@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "task_key": "SMALL-ADMIN-FIXES",
+  "status": "in_progress",
+  "current_step": "3.4",
+  "started": "2026-08-18T12:39:01Z",
+  "updated": "2026-08-18T12:39:01Z",
+  "config": {
+    "input_mode": "freeform",
+    "user_description": "A couple of changes: In http://localhost:7200/admin/tickets, print the ticket number on the ticket itself. When /project:write-ticket creates a ticket for app feedback, link the app feedback and the ticket with each other. http://localhost:7200/admin/agent-tasks/23 should have the German title \"Chancen verbessern\"",
+    "special_instructions": null,
+    "ticket_mode": false,
+    "ticket_id": null,
+    "ticket_url": null,
+    "ticket_api_base": null,
+    "ticket_claimed": false,
+    "branch_name": "small-admin-fixes-ticket-and-title-fixes",
+    "original_branch": "main",
+    "original_head": "17af701e0ba0556c659e02094168df476d7348e0",
+    "docs_folder": "docs",
+    "is_git_repo": true,
+    "workflow_scope": null,
+    "pr_prefix": null,
+    "pr_exists": false,
+    "pr_url": null,
+    "keep_settings": {
+      "prd": "always",
+      "plan": "always",
+      "review": "always",
+      "state": "never"
+    },
+    "keep_files": null,
+    "open_md_setting": "always",
+    "auto_open_md": true
+  },
+  "discovery": {
+    "agents_available": false,
+    "planner_agents": [],
+    "writer_agents": [],
+    "coding_agents": [],
+    "review_agents": [],
+    "test_coding_agents": [],
+    "test_review_agents": [],
+    "test_runner_agents": [],
+    "tooling_coding_agents": [],
+    "tooling_review_agents": [],
+    "test_command": null
+  },
+  "artifacts": {
+    "prd_skipped": null,
+    "prd_file": null,
+    "plan_file": null
+  },
+  "delegation": {
+    "assignments": [],
+    "escalations": []
+  },
+  "completed_steps": []
+}
