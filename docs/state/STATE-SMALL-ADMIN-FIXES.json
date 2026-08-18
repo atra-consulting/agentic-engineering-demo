@@ -2,7 +2,7 @@
   "version": 1,
   "task_key": "SMALL-ADMIN-FIXES",
   "status": "in_progress",
-  "current_step": "9.3",
+  "current_step": "12.3",
   "started": "2026-08-18T12:39:01Z",
   "updated": "2026-08-18T12:39:01Z",
   "config": {
@@ -71,9 +71,25 @@
       { "step": "Test review: be-test-reviewer", "agent": "be-test-reviewer", "model": "haiku", "verification": "n/a (reviewer)" },
       { "step": "Testing: be-test-runner", "agent": "be-test-runner", "model": "haiku", "verification": "355 passed" },
       { "step": "Testing: fe-test-runner", "agent": "fe-test-runner", "model": "haiku", "verification": "524 passed" },
-      { "step": "Start backend dev server for manual verification", "agent": "admin", "model": "haiku", "verification": "n/a (ops)" }
+      { "step": "Start backend dev server for manual verification", "agent": "admin", "model": "haiku", "verification": "n/a (ops)" },
+      { "step": "Code review round 1: be-reviewer", "agent": "be-reviewer", "model": "sonnet", "verification": "n/a (reviewer)" },
+      { "step": "Code review round 1: db-reviewer", "agent": "db-reviewer", "model": "sonnet", "verification": "n/a (reviewer)" },
+      { "step": "Code review round 1: fe-reviewer", "agent": "fe-reviewer", "model": "sonnet", "verification": "n/a (reviewer)" },
+      { "step": "Code review round 1: ba-reviewer", "agent": "ba-reviewer", "model": "sonnet", "verification": "n/a (reviewer)" },
+      { "step": "Review fix: agentTaskSeed.ts (dedupe literal, updatedAt)", "agent": "db-coder", "model": "sonnet", "verification": "round 2 review + tests" },
+      { "step": "Review fix: ticket-board test coverage (5 columns)", "agent": "fe-coder", "model": "sonnet", "verification": "round 2 review + tests" },
+      { "step": "Review fix: plan doc contrast figure + linking framing", "agent": "direct", "model": "n/a", "verification": "orchestrator read-through" },
+      { "step": "Code review round 2: be-reviewer", "agent": "be-reviewer", "model": "sonnet", "verification": "n/a (reviewer)" },
+      { "step": "Code review round 2: fe-reviewer", "agent": "fe-reviewer", "model": "sonnet", "verification": "n/a (reviewer)" },
+      { "step": "Review fix: updatedAt intent comment", "agent": "direct", "model": "n/a", "verification": "round 3 review" },
+      { "step": "Code review round 3: be-reviewer", "agent": "be-reviewer", "model": "sonnet", "verification": "n/a (reviewer)" },
+      { "step": "Post-review testing: be-test-runner", "agent": "be-test-runner", "model": "haiku", "verification": "355 passed" },
+      { "step": "Post-review testing: fe-test-runner", "agent": "fe-test-runner", "model": "haiku", "verification": "528 passed" },
+      { "step": "Doc-sync review: db-reviewer (SPECS-database.md)", "agent": "db-reviewer", "model": "sonnet", "verification": "n/a (reviewer)" },
+      { "step": "Doc-sync review: fe-reviewer (SPECS-frontend.md)", "agent": "fe-reviewer", "model": "sonnet", "verification": "n/a (reviewer)" },
+      { "step": "Doc-sync fix: SPECS-database.md", "agent": "direct", "model": "n/a", "verification": "orchestrator read-through" }
     ],
     "escalations": []
   },
-  "completed_steps": ["1", "2", "2.1", "3.1", "3.2", "3.3", "3.4", "4.1", "4.2", "4.3", "4.4", "4.4b", "4.5", "5.1", "7.1", "7.2", "7.3", "7.4", "7.5", "7.5b", "7.6", "8.1", "8.2", "9.1", "9.2", "9.3"]
+  "completed_steps": ["1", "2", "2.1", "3.1", "3.2", "3.3", "3.4", "4.1", "4.2", "4.3", "4.4", "4.4b", "4.5", "5.1", "7.1", "7.2", "7.3", "7.4", "7.5", "7.5b", "7.6", "8.1", "8.2", "9.1", "9.2", "9.3", "10.1", "10.2", "10.3", "11.1", "11.2", "12.1", "12.2", "12.3"]
 }
