@@ -335,7 +335,9 @@ export async function seedAgentTasks(): Promise<void> {
 
   // Permanent, standing overwrite — NOT a one-shot migration. Runs unconditionally on
   // every startup to keep agent_task #23's title pinned to the current canonical value,
-  // since INSERT OR IGNORE never touches an already-seeded row.
+  // since INSERT OR IGNORE never touches an already-seeded row. Unlike szenarioSeed.ts's
+  // fixed-timestamp overwrite, updatedAt here uses "now" on purpose: it reflects the real
+  // moment this row was actually corrected, not a pinned genesis date.
   await client.execute({
     sql: `UPDATE agent_task SET title=@title, updatedAt=@updatedAt WHERE id=23`,
     args: { title: AGENT_TASK_23_TITLE, updatedAt: new Date().toISOString() },
