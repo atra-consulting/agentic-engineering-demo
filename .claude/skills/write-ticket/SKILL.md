@@ -2,8 +2,8 @@
 name: "project:write-ticket"
 description: "Headless autonomous skill that claims one agent-task feedback item (or takes a task ID, a task URL, or free-floating feedback text), judges it, and files a new Kanban ticket (Definition, owner HUMAN) from it — commenting on the ticket to demand missing info when the feedback is too thin. Never builds, pushes, or opens a PR."
 argument-hint: "[task-id | task-url | feedback-text]"
-version: 1.5.0
-last-modified: 2026-08-02
+version: 1.5.1
+last-modified: 2026-08-18
 allowed-tools:
   - Read
   - Bash
@@ -210,13 +210,13 @@ Weiter zu Schritt 4. Im Freitext-Modus entfällt Schritt 4 (siehe dort) — dann
 
 *(Läuft in JEDEM Durchlauf, der eine echte Agent-Task übernommen hat — Queue-, Task-ID- und Task-URL-Modus, ausnahmslos in BEIDEN Zweigen 3a und 3b. Im Freitext-Modus entfällt Schritt 4 komplett: Es gibt keine Agent-Task, die abzuschließen wäre. Dann direkt weiter zu Schritt 5 — Schritt 4 nur überspringen, nicht den ganzen Durchlauf.)*
 
-Eine übernommene Agent-Task **soll** immer geschlossen werden (`DONE`). Nur wenn der `/done`-Aufruf selbst fehlschlägt — oder in Zweig 3a schon der Kommentar fehlschlägt — bleibt sie offen (siehe die Fehlerfälle unten). In BEIDEN Zweigen (3a und 3b) die ursprüngliche Feedback-Aufgabe abschließen.
+Eine übernommene Agent-Task **soll** immer geschlossen werden (`DONE`). Nur wenn der `/done`-Aufruf selbst fehlschlägt — oder in Zweig 3a schon der Kommentar fehlschlägt — bleibt sie offen (siehe die Fehlerfälle unten). In BEIDEN Zweigen (3a und 3b) die ursprüngliche Feedback-Aufgabe abschließen. Der `/done`-Kommentar nennt dabei nicht nur die Ticket-Nummer, sondern auch die volle Ticket-URL — so führt der Link von der Feedback-Aufgabe direkt zum neuen Ticket.
 
 ```bash
 DONE_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
   -H "Authorization: Bearer $AGENT_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"comment": "Triagiert in Ticket #<newId> (Definition, Mensch). <Zusatz je nach Zweig>"}' \
+  -d '{"comment": "Triagiert in Ticket #<newId> (Definition, Mensch): <APP_FRONTEND_URL>/admin/tickets/<newId>. <Zusatz je nach Zweig>"}' \
   "${APP_BASE_URL:-http://localhost:7070}/api/agent-tasks/<id>/done")
 ```
 

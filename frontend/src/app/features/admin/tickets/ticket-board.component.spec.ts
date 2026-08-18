@@ -186,6 +186,31 @@ describe('TicketBoardComponent — template rendering', () => {
     expect(definitionColumn.textContent).toContain('Ticket 0');
   });
 
+  it('renders the ticket number prefix on a card in the Definition column', () => {
+    const definitionColumn: HTMLElement = fixture.nativeElement.querySelector('#list-DEFINITION');
+    expect(definitionColumn.textContent).toContain('#0');
+  });
+
+  it('renders the ticket number prefix on a card in the TODO column', () => {
+    const todoColumn: HTMLElement = fixture.nativeElement.querySelector('#list-TODO');
+    expect(todoColumn.textContent).toContain('#1');
+  });
+
+  it('renders the ticket number prefix on a card in the IN_PROGRESS column', () => {
+    const inProgressColumn: HTMLElement = fixture.nativeElement.querySelector('#list-IN_PROGRESS');
+    expect(inProgressColumn.textContent).toContain('#3');
+  });
+
+  it('renders the ticket number prefix on a card in the ON_HOLD column', () => {
+    const onHoldColumn: HTMLElement = fixture.nativeElement.querySelector('#list-ON_HOLD');
+    expect(onHoldColumn.textContent).toContain('#4');
+  });
+
+  it('renders the ticket number prefix on a card in the DONE column', () => {
+    const doneColumn: HTMLElement = fixture.nativeElement.querySelector('#list-DONE');
+    expect(doneColumn.textContent).toContain('#5');
+  });
+
   it('renders the "Bereit" column header for the TODO column', () => {
     const header: HTMLElement = fixture.nativeElement.querySelector('.column-todo .column-title');
     expect(header).toBeTruthy();
