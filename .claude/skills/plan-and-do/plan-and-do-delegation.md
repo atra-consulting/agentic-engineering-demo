@@ -353,7 +353,7 @@ Reference for SKILL.md Step 7.3 (Generate Detailed Plan). SKILL.md reads this se
 **If agents_available:**
 
 1. **Draft — with a planner:** Launch the first `planner_agent` via Task tool. It writes the WHOLE plan in one dispatch. Model: `opus` for a complex task, `sonnet` for a small one. No merge step needed. Skip to 3.
-2. **Draft — no planner:** Launch ALL `coding_agents` in parallel via Task tool. Each coder contributes plan tasks for their domain (backend, frontend, database, etc.). Model per coder: match the difficulty of that domain's slice. Then **merge** all outputs into one coherent plan. Resolve overlaps and ensure consistent task ordering. If `coding_agents` is also empty, fall back to the first `writer_agent`; if there is none, write the plan directly.
+2. **Draft — no planner:** Launch ALL `coding_agents` in parallel via Task tool. Each coder contributes plan tasks for their domain (backend, frontend, database, etc.). Model per coder: match the difficulty of that domain's slice. Then **merge** all outputs into one coherent plan. Resolve overlaps and ensure consistent task ordering. If `coding_agents` is also empty, fall back to the first read-capable `writer_agent` (one with a `Read` tool, e.g. `ba-writer`) — never a write-only agent like `data-writer`, which has no way to investigate the codebase and draft plan content from scratch; if none qualifies, write the plan directly.
 3. **Review:** Apply the **REVIEWER SCOPE FILTER** (`## 14. REVIEWER SCOPE FILTER`) and launch the applicable `review_agents` in parallel via Task tool. Each reviewer checks the plan for completeness, feasibility, missing edge cases, and correct task ordering from their domain perspective. Model: one tier below the draft, floor of `sonnet` for security or architecture.
 4. **Fix:** Collect all reviewer findings. Delegate the fixes to the drafting agent — no user prompt needed. Model: same tier as the draft. If reviewers flag missing tasks or wrong ordering, update the plan. Fix directly only when `coding_agents` is empty or `agents_available == false`. Failed fixes run the escalation loop.
 5. **Result:** The reviewed and fixed plan becomes the final draft for user approval.
@@ -437,7 +437,7 @@ Read project's CLAUDE.md for `## Agents` section.
 5. Ends with `-coder` or `-designer` → `coding_agents` (e.g., `be-coder`, `fe-coder`, `ui-designer`)
 6. Ends with `-reviewer` → `review_agents` (e.g., `be-reviewer`, `fe-reviewer`)
 7. Names ending `-planner`, or exactly `planner` → `planner_agents` (e.g., `planner`, `feature-planner`)
-8. Anything else (e.g., `admin`) → skip as utility
+8. Anything else (e.g., `admin`, `data-reader`) → skip as utility. Still directly dispatchable by name for ad hoc tasks (e.g., `data-reader` for read-only lookups) — "skip as utility" only means it is excluded from the categorized dispatch lists below.
 
 Note: rule 0 (tooling-agent prefix match — `python-*` / `shell-*` / `skill-*`) still runs first and would catch a hypothetical `skill-planner`-style name before this rule reaches it — this precedence is intentional, not a bug.
 
