@@ -437,7 +437,7 @@ Read project's CLAUDE.md for `## Agents` section.
 5. Ends with `-coder` or `-designer` → `coding_agents` (e.g., `be-coder`, `fe-coder`, `ui-designer`)
 6. Ends with `-reviewer` → `review_agents` (e.g., `be-reviewer`, `fe-reviewer`)
 7. Names ending `-planner`, or exactly `planner` → `planner_agents` (e.g., `planner`, `feature-planner`)
-8. Anything else (e.g., `admin`, `data-reader`) → skip as utility. Still directly dispatchable by name for ad hoc tasks (e.g., `data-reader` for read-only lookups) — "skip as utility" only means it is excluded from the categorized dispatch lists below.
+8. Anything else (e.g., `admin`, `data-reader`) → skip as utility. Still directly dispatchable by name for ad hoc tasks (e.g., `data-reader` for read-only lookups) — "skip as utility" only means it is excluded from the categorized dispatch lists below. Note: `data-writer` does not land here. Its `-writer` suffix matches rule 4 first, so it's classified as a `writer_agent` despite being write-only. See the drafting-fallback guard (`## 10`, SKILL.md Step 6.2) that excludes it.
 
 Note: rule 0 (tooling-agent prefix match — `python-*` / `shell-*` / `skill-*`) still runs first and would catch a hypothetical `skill-planner`-style name before this rule reaches it — this precedence is intentional, not a bug.
 
