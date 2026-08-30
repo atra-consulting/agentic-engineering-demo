@@ -11,12 +11,20 @@
  *   4. (Optional) Seeds correct per-source counts: 7 rows for EMAIL, 4 for GITHUB_ISSUE, 6 for APP_LOG, 6 for ERROR_REPORT.
  *
  * Also verifies the AGENT_TASK_SEED source data directly (not via the live
- * DB) for row id 23 — see the 'AGENT_TASK_SEED source data' suite below. On a
- * shared dev DB that was already seeded before row 23 was reworded,
- * INSERT OR IGNORE means the live row will keep its old values forever, so a
- * live-DB assertion on the new title/subject would be flaky. Asserting
- * against the exported constant instead is deterministic regardless of what
- * is currently in any given SQLite file.
+ * DB) for row id 23 — see the 'AGENT_TASK_SEED source data' suite below.
+ * INSERT OR IGNORE still means that, in general, a shared dev DB that was
+ * already seeded before a row was reworded keeps its old values forever —
+ * that stays true for every field on every row EXCEPT id 23's title. That one
+ * field gets a dedicated, one-time corrective UPDATE (REQ-302, run at the end
+ * of seedAgentTasks(), after the INSERT OR IGNORE batch) precisely because it
+ * needed to reach already-seeded databases too, not just fresh ones. The
+ * correction is guarded on the old English literal still being in place, so
+ * it converges once and then becomes a no-op. Asserting against the exported
+ * constant here is still the right check: it is the deterministic,
+ * version-controlled source of truth that both the INSERT and the corrective
+ * UPDATE read from, so a live-DB assertion would still be redundant (and, for
+ * every other field on every other row, still flaky) even though the title
+ * on id 23 now does converge.
  *
  * Test isolation notes
  * --------------------
@@ -184,11 +192,20 @@ test.describe.serial('seedAgentTasks — idempotent seeder', () => {
 // ---------------------------------------------------------------------------
 // Suite: AGENT_TASK_SEED source data — row id 23 (reworded Chancen-Notiz task)
 //
-// Reads only the exported AGENT_TASK_SEED constant, never the DB. INSERT OR
-// IGNORE means an already-seeded shared dev DB keeps row 23's OLD values
-// forever, so a live-DB assertion on the new title/subject would be flaky.
-// This suite is deliberately independent of the serial DB suite above (no
-// shared state, no ordering dependency) and does not need `workers: 1`.
+// Reads only the exported AGENT_TASK_SEED constant, never the DB. For most
+// fields on most rows, INSERT OR IGNORE means an already-seeded shared dev DB
+// keeps the OLD values forever, so a live-DB assertion would be flaky. Row
+// 23's title is the one deliberate exception: REQ-301/REQ-302 changed the
+// seed value to German AND added a one-time corrective UPDATE (see
+// seedAgentTasks() in agentTaskSeed.ts) specifically so the fix reaches
+// already-seeded databases too, not just fresh ones. Even so, this suite
+// keeps asserting against the exported constant rather than the live DB: the
+// constant is the deterministic, version-controlled source of truth that
+// both the INSERT and the corrective UPDATE read from, so it is the right
+// thing to assert regardless of which path (fresh insert vs. corrective
+// update) actually wrote the current title into a given SQLite file. This
+// suite is deliberately independent of the serial DB suite above (no shared
+// state, no ordering dependency) and does not need `workers: 1`.
 // ---------------------------------------------------------------------------
 test.describe('AGENT_TASK_SEED source data — row id 23', () => {
   test('id 23 has the reworded title, subject, and German Chancen-Notiz body', () => {
@@ -198,7 +215,7 @@ test.describe('AGENT_TASK_SEED source data — row id 23', () => {
       throw new Error('AGENT_TASK_SEED has no row with id 23');
     }
 
-    expect(row23.title).toBe('Improve chances');
+    expect(row23.title).toBe('Chancen verbessern');
 
     expect(typeof row23.metadata).toBe('string');
     const metadata = JSON.parse(row23.metadata as string) as { subject?: string };
