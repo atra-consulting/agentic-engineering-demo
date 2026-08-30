@@ -40,6 +40,11 @@ import { AgentTaskService } from '../../../core/services/agent-task.service';
           <dt class="col-sm-3">Kommentar</dt>
           <dd class="col-sm-9">{{ task.comment ?? '—' }}</dd>
 
+          @if (task.ticketId) {
+            <dt class="col-sm-3">Ticket</dt>
+            <dd class="col-sm-9"><a routerLink="/admin/tickets/{{ task.ticketId }}">Ticket #{{ task.ticketId }}</a></dd>
+          }
+
           <dt class="col-sm-3">Aufgenommen am</dt>
           <dd class="col-sm-9">{{ task.pickedUpAt ?? '—' }}</dd>
 

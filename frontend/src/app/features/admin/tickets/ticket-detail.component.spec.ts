@@ -31,6 +31,7 @@ function makeTicket(overrides: Partial<Ticket> = {}): Ticket {
     body: 'Bitte CSV-Export implementieren.',
     status: 'ON_HOLD',
     solution: null,
+    agentTaskId: null,
     commentCount: 2,
     comments: [makeComment(1, 'AGENT'), makeComment(2, 'HUMAN')],
     pickedUpAt: null,
