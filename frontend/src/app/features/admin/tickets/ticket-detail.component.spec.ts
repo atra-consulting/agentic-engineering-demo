@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { By } from '@angular/platform-browser';
+import { provideRouter, RouterLink } from '@angular/router';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
@@ -218,6 +219,73 @@ describe('TicketDetailComponent — template rendering', () => {
   it('renders "Claude Code" as author name for AGENT comment', () => {
     const text: string = fixture.nativeElement.textContent;
     expect(text).toContain('Claude Code');
+  });
+});
+
+// ─── Agent-task cross-link ─────────────────────────────────────────────────────
+
+describe('TicketDetailComponent — agent-task cross-link', () => {
+  // Scope link lookups to the "Info" dl so the "Zurück" routerLink at the top
+  // of the page (also a RouterLink) cannot be mistaken for the cross-link.
+  const INFO_DL_SELECTOR = 'dl.mb-0.small';
+
+  it('renders exactly one link to the agent-task detail page when agentTaskId is set', async () => {
+    const linkedTicket = makeTicket({ agentTaskId: 42 });
+    const mockService = makeMockTicketService();
+    mockService.getById.and.returnValue(of(linkedTicket));
+
+    await TestBed.configureTestingModule({
+      imports: [TicketDetailComponent],
+      providers: [
+        provideRouter([]),
+        { provide: TicketService, useValue: mockService },
+        { provide: NotificationService, useValue: makeMockNotification() },
+        { provide: NgbModal, useValue: makeModalStub() },
+        { provide: ActivatedRoute, useValue: makeRoute('10') },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(TicketDetailComponent);
+    fixture.detectChanges();
+
+    const infoDl = fixture.debugElement.query(By.css(INFO_DL_SELECTOR));
+    expect(infoDl).toBeTruthy();
+
+    const linkDebugEls = infoDl.queryAll(By.directive(RouterLink));
+    expect(linkDebugEls.length).toBe(1);
+
+    const anchor = linkDebugEls[0].nativeElement as HTMLAnchorElement;
+    expect(anchor.getAttribute('href')).toBe('/admin/agent-tasks/42');
+    expect(anchor.textContent).toContain('App-Feedback #42');
+  });
+
+  it('renders no agent-task link when agentTaskId is null', async () => {
+    const unlinkedTicket = makeTicket({ agentTaskId: null });
+    const mockService = makeMockTicketService();
+    mockService.getById.and.returnValue(of(unlinkedTicket));
+
+    await TestBed.configureTestingModule({
+      imports: [TicketDetailComponent],
+      providers: [
+        provideRouter([]),
+        { provide: TicketService, useValue: mockService },
+        { provide: NotificationService, useValue: makeMockNotification() },
+        { provide: NgbModal, useValue: makeModalStub() },
+        { provide: ActivatedRoute, useValue: makeRoute('10') },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(TicketDetailComponent);
+    fixture.detectChanges();
+
+    const infoDl = fixture.debugElement.query(By.css(INFO_DL_SELECTOR));
+    expect(infoDl).toBeTruthy();
+
+    const linkDebugEls = infoDl.queryAll(By.directive(RouterLink));
+    expect(linkDebugEls.length).toBe(0);
+
+    // No stray dt/dd — the label text is absent from the page entirely.
+    expect(fixture.nativeElement.textContent).not.toContain('App-Feedback');
   });
 });
 
