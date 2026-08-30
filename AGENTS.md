@@ -37,6 +37,8 @@ When writing Markdown (specs, plans, docs, reviews): as short & brief as possibl
 cd backend && npx tsx --watch src/index.ts         # Backend only (with hot reload)
 cd frontend && npx ng serve --port 7200 --proxy-config proxy.conf.json  # Frontend only
 cd frontend && npx ng build                        # Frontend build check
+cd backend && npm test                             # Backend Playwright API tests
+cd frontend && npx ng test --watch=false            # Frontend Jasmine/Karma unit tests
 ```
 
 **Prerequisites:** Node.js 20.19+ (checked by `start.sh`).
@@ -59,7 +61,7 @@ cd frontend && npx ng build                        # Frontend build check
 - **Authorization**: Entity routes use `requireAuth` (login required); admin/cron routes use `requireRole('ADMIN')`. Both come from `middleware/auth.ts`, which exports only `requireAuth` and `requireRole` — there is **no** `requirePermission`. Agent endpoints use `requireAgentToken` (`middleware/agentAuth.ts`).
 - **Error responses**: `{ status, message, timestamp, fieldErrors }` via global error handler in `middleware/errorHandler.ts`.
 - **Pagination**: Response shape mimics the Spring Data Page format (name only — backend is Node): `{ content, totalElements, totalPages, size, number, first, last }`. `number` is 0-indexed.
-- **Testing**: Backend uses Playwright (`@playwright/test`) for end-to-end API tests under `backend/src/test/`.
+- **Testing**: Backend uses Playwright (`@playwright/test`) for end-to-end API tests under `backend/src/test/`. Run with `cd backend && npm test`.
 
 ### Frontend
 
@@ -67,6 +69,7 @@ cd frontend && npx ng build                        # Frontend build check
 - **DI**: `private service = inject(Service)`, not constructor injection.
 - **Control flow**: `@if`/`@for`/`@switch` blocks only, never `*ngIf`/`*ngFor`. `@for` requires `track`.
 - **Pagination**: NgbPagination is 1-indexed, backend is 0-indexed. Convert with `this.currentPage - 1` in service calls.
+- **Testing**: Jasmine/Karma unit tests colocated with sources (`*.spec.ts`). Run with `cd frontend && npx ng test --watch=false`.
 
 ## Adding a New Entity
 
