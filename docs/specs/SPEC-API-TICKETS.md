@@ -45,6 +45,7 @@ Agents do not only claim `TODO`+`AI` tickets: `do-fully-automatic` also claims a
   "status": "ON_HOLD",
   "solution": null,
   "fullyReady": false,
+  "agentTaskId": 12,
   "pickedUpAt": null,
   "resolvedAt": null,
   "createdAt": "2026-06-21T10:00:00.000Z",
@@ -63,6 +64,7 @@ Agents do not only claim `TODO`+`AI` tickets: `do-fully-automatic` also claims a
 ```
 
 - `solution` is `null` until resolved. Set to `DONE` or `WONT_DO` when `status=DONE`.
+- `agentTaskId` is the id of the app-feedback item (`agent_task`) this ticket was created from, or `null` for a ticket that has none — e.g. a hand-made ticket from the "Neues Ticket" modal, or one created via `write-ticket` in free-text mode. Set only at create time; no other endpoint writes or clears it.
 - `pickedUpAt` is set when status → `IN_PROGRESS`. `resolvedAt` is set when status → `DONE`.
 - `comments` array is included on single-ticket responses. List and board responses include `commentCount` (integer) instead.
 - All timestamps are ISO-8601 strings.
@@ -298,22 +300,28 @@ curl -s -X POST -H "Authorization: Bearer $AGENT_API_TOKEN" \
 ---
 
 ### POST `/api/tickets` — create (agent token · loopback · admin)
-**Auth:** agent token, loopback bypass, or admin session (first match wins). **Body:** `{ "type": "FEATURE"|"BUG"|"CHORE", "title": "<string>", "body": "<string>", "fullyReady"?: <optional boolean> }`.
+**Auth:** agent token, loopback bypass, or admin session (first match wins). **Body:** `{ "type": "FEATURE"|"BUG"|"CHORE", "title": "<string>", "body": "<string>", "fullyReady"?: <optional boolean>, "agentTaskId"?: <optional integer or null> }`.
 
-Creates a ticket with `owner=HUMAN`, `status=DEFINITION` (lands in the intake column), no comments. Optional `fullyReady` boolean (defaults to `false` when omitted) marks the ticket as ready for `do-fully-automatic` to claim directly without human review. A skill can call this with the agent token — no admin login needed.
+Creates a ticket with `owner=HUMAN`, `status=DEFINITION` (lands in the intake column), no comments. Optional `fullyReady` boolean (defaults to `false` when omitted) marks the ticket as ready for `do-fully-automatic` to claim directly without human review. Optional `agentTaskId` links the ticket back to the app-feedback item (`agent_task`) it was filed from — omitted or `null` stores `null`; an id that does not exist returns `400` with `fieldErrors.agentTaskId` and creates no ticket; a non-integer value also returns `400`. This is the **only** write path for the link (see `agentTaskId` under "Ticket object" above). A skill can call this with the agent token — no admin login needed.
 
 | Result | Meaning |
 |--------|---------|
 | `201` + ticket | created |
-| `400` | validation failure |
+| `400` | validation failure (including an unknown or non-integer `agentTaskId`) |
 | `401` | bad/missing token and no admin session |
 | `403` | logged in but not admin (production, no token) |
 
 ```bash
-# Agent token (headless skill):
+# Agent token (headless skill), filed from a claimed agent task (agentTaskId 12):
 curl -s -X POST -H "Authorization: Bearer $AGENT_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"type":"BUG","title":"Login button missing on mobile","body":"Reproducible on iOS 17 Safari."}' \
+  -d '{"type":"BUG","title":"Login button missing on mobile","body":"Reproducible on iOS 17 Safari.","agentTaskId":12}' \
+  "$APP_BASE_URL/api/tickets"
+
+# Free-text mode, no source agent task — agentTaskId is null:
+curl -s -X POST -H "Authorization: Bearer $AGENT_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"CHORE","title":"Tidy up sidebar spacing","body":"Reported verbally in standup.","agentTaskId":null}' \
   "$APP_BASE_URL/api/tickets"
 ```
 
@@ -538,7 +546,7 @@ X-Agent-Token: $AGENT_API_TOKEN
 | Step | Call | Notes |
 |------|------|-------|
 | Peek board | `GET /api/tickets/board` | Read all columns without claiming. Agent token or loopback bypass. |
-| Create | `POST /api/tickets` | Body `{ "type", "title", "body", "fullyReady"?: boolean }`. New ticket lands `DEFINITION` + `owner=HUMAN`. Optional `fullyReady` marks the ticket ready for automatic promotion. Use to file a triaged feedback item as an intake ticket. `201` on success. |
+| Create | `POST /api/tickets` | Body `{ "type", "title", "body", "fullyReady"?: boolean, "agentTaskId"?: number \| null }`. New ticket lands `DEFINITION` + `owner=HUMAN`. Optional `fullyReady` marks the ticket ready for automatic promotion. Optional `agentTaskId` links the ticket back to the claimed `agent_task` id — send the claimed id in task-backed modes, `null` in free-text mode; never omit the key. Use to file a triaged feedback item as an intake ticket. `201` on success, `400` if `agentTaskId` does not exist. |
 | Assign to AI | `PATCH /api/tickets/:id/owner` | Body `{ "owner": "AI" }`. Flips owner without changing status — "An KI übergeben" on a `DEFINITION` ticket. |
 | Comment | `POST /api/tickets/:id/comments` | Body `{ "body": string, "handBackToAi"?: boolean, "clearFullyReady"?: boolean }`. Adds a comment (stored as `author=HUMAN`). Optional `clearFullyReady` clears the `fullyReady` flag when true. Use to record what a thin ticket is missing. |
 | Set status | `PATCH /api/tickets/:id/status` | Body `{ "status" }`. Move to any column incl. `DEFINITION`. Sets/clears `solution` + `resolvedAt` on DONE transitions. |
