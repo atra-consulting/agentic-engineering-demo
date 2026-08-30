@@ -40,6 +40,7 @@ const CreateBodySchema = z.object({
   title: z.string().min(1, 'Titel ist erforderlich'),
   body: z.string().min(1, 'Beschreibung ist erforderlich'),
   fullyReady: z.boolean().optional(),
+  agentTaskId: z.number().int('agentTaskId muss eine ganze Zahl sein').nullable().optional(),
 });
 
 const StatusBodySchema = z.object({

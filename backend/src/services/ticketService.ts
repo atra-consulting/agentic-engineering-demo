@@ -1,5 +1,5 @@
 import { client } from '../config/db.js';
-import { NotFoundError, ConflictError } from '../utils/errors.js';
+import { NotFoundError, ConflictError, ValidationError } from '../utils/errors.js';
 import { buildPage, type PageResult, type SortParams } from '../utils/pagination.js';
 import {
   TICKET_OWNER,
@@ -32,6 +32,7 @@ export interface TicketDTO {
   status: string;
   solution: string | null;
   fullyReady: boolean;
+  agentTaskId: number | null;
   pickedUpAt: string | null;
   resolvedAt: string | null;
   createdAt: string;
@@ -48,6 +49,7 @@ export interface TicketListItemDTO {
   status: string;
   solution: string | null;
   fullyReady: boolean;
+  agentTaskId: number | null;
   pickedUpAt: string | null;
   resolvedAt: string | null;
   createdAt: string;
@@ -96,6 +98,7 @@ interface TicketRow {
   status: string;
   solution: string | null;
   fullyReady: number;
+  agentTaskId: number | null;
   pickedUpAt: string | null;
   resolvedAt: string | null;
   createdAt: string;
@@ -138,6 +141,7 @@ function toDTO(row: TicketRow, comments: TicketCommentDTO[]): TicketDTO {
     status: row.status,
     solution: row.solution,
     fullyReady: Boolean(row.fullyReady),
+    agentTaskId: row.agentTaskId !== null ? Number(row.agentTaskId) : null,
     pickedUpAt: row.pickedUpAt,
     resolvedAt: row.resolvedAt,
     createdAt: row.createdAt,
@@ -156,6 +160,7 @@ function toListItemDTO(row: TicketListRow): TicketListItemDTO {
     status: row.status,
     solution: row.solution,
     fullyReady: Boolean(row.fullyReady),
+    agentTaskId: row.agentTaskId !== null ? Number(row.agentTaskId) : null,
     pickedUpAt: row.pickedUpAt,
     resolvedAt: row.resolvedAt,
     createdAt: row.createdAt,
@@ -537,13 +542,28 @@ export const ticketService = {
     title: string;
     body: string;
     fullyReady?: boolean;
+    agentTaskId?: number | null;
   }): Promise<TicketDTO> {
+    const agentTaskId = data.agentTaskId ?? null;
+
+    if (agentTaskId !== null) {
+      const agentTaskResult = await client.execute({
+        sql: 'SELECT id FROM agent_task WHERE id = ?',
+        args: [agentTaskId],
+      });
+      if (agentTaskResult.rows.length === 0) {
+        throw new ValidationError('Validierungsfehler', {
+          agentTaskId: `AgentTask mit ID ${agentTaskId} nicht gefunden`,
+        });
+      }
+    }
+
     const now = new Date().toISOString();
     const result = await client.execute({
-      sql: `INSERT INTO ticket (owner, type, title, body, status, solution, fullyReady, pickedUpAt, resolvedAt, createdAt, updatedAt)
-            VALUES ('HUMAN', ?, ?, ?, 'DEFINITION', NULL, ?, NULL, NULL, ?, ?)
+      sql: `INSERT INTO ticket (owner, type, title, body, status, solution, fullyReady, agentTaskId, pickedUpAt, resolvedAt, createdAt, updatedAt)
+            VALUES ('HUMAN', ?, ?, ?, 'DEFINITION', NULL, ?, ?, NULL, NULL, ?, ?)
             RETURNING *`,
-      args: [data.type, data.title, data.body, data.fullyReady ? 1 : 0, now, now],
+      args: [data.type, data.title, data.body, data.fullyReady ? 1 : 0, agentTaskId, now, now],
     });
     const row = result.rows[0] as unknown as TicketRow;
     return toDTO(row, []);
