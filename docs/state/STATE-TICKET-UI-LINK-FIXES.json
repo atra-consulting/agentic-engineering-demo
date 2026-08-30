@@ -1,10 +1,10 @@
 {
   "version": 1,
   "task_key": "TICKET-UI-LINK-FIXES",
-  "status": "in_progress",
-  "current_step": "3.4",
+  "status": "completed",
+  "current_step": "12.3",
   "started": "2026-08-30T16:33:38Z",
-  "updated": "2026-08-30T16:33:38Z",
+  "updated": "2026-08-30T21:22:48Z",
   "config": {
     "input_mode": "freeform",
     "user_description": "A couple of changes: 1) In /admin/tickets, print the ticket number on the ticket itself. 2) When /project:write-ticket creates a ticket for app feedback, link the app feedback and the ticket with each other. 3) /admin/agent-tasks/23 should have the German title 'Chancen verbessern'.",
@@ -19,8 +19,8 @@
     "original_head": "47a751fddda1f298e57d921bd4152a78c34e0406",
     "docs_folder": "docs",
     "is_git_repo": true,
-    "workflow_scope": null,
-    "pr_prefix": null,
+    "workflow_scope": "full",
+    "pr_prefix": "feat:",
     "pr_exists": false,
     "pr_url": null,
     "keep_settings": {
@@ -29,30 +29,322 @@
       "review": "always",
       "state": "never"
     },
-    "keep_files": null,
+    "keep_files": {
+      "prd": true,
+      "plan": true,
+      "review": true,
+      "state": false
+    },
     "open_md_setting": "always",
     "auto_open_md": true
   },
   "discovery": {
-    "agents_available": false,
-    "planner_agents": [],
-    "writer_agents": [],
-    "coding_agents": [],
-    "review_agents": [],
-    "test_coding_agents": [],
-    "test_review_agents": [],
-    "test_runner_agents": [],
-    "tooling_coding_agents": [],
-    "tooling_review_agents": [],
-    "test_command": null
+    "agents_available": true,
+    "planner_agents": [
+      "planner"
+    ],
+    "writer_agents": [
+      "ba-writer",
+      "data-writer"
+    ],
+    "coding_agents": [
+      "be-coder",
+      "db-coder",
+      "fe-coder",
+      "ui-designer"
+    ],
+    "review_agents": [
+      "ba-reviewer",
+      "requirements-reviewer",
+      "be-reviewer",
+      "db-reviewer",
+      "fe-reviewer",
+      "ui-reviewer"
+    ],
+    "test_coding_agents": [
+      "be-test-coder",
+      "fe-test-coder"
+    ],
+    "test_review_agents": [
+      "be-test-reviewer",
+      "fe-test-reviewer"
+    ],
+    "test_runner_agents": [
+      "be-test-runner",
+      "fe-test-runner"
+    ],
+    "tooling_coding_agents": [
+      "python-coder",
+      "shell-coder",
+      "skill-coder"
+    ],
+    "tooling_review_agents": [
+      "python-reviewer",
+      "shell-reviewer",
+      "skill-reviewer"
+    ],
+    "test_command": "cd backend && npm test  &&  cd frontend && npx ng test --watch=false"
   },
   "artifacts": {
-    "prd_skipped": null,
-    "prd_file": null,
-    "plan_file": null
+    "prd_skipped": false,
+    "prd_file": "docs/prds/PRD-TICKET-UI-LINK-FIXES.md",
+    "plan_file": "docs/plans/PLAN-TICKET-UI-LINK-FIXES.md"
   },
   "delegation": {
-    "assignments": [],
+    "assignments": [
+      {
+        "step": "PRD draft",
+        "agent": "planner",
+        "model": "opus",
+        "verification": "reviewer panel"
+      },
+      {
+        "step": "PRD review: ba-reviewer",
+        "agent": "ba-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "PRD review: be-reviewer",
+        "agent": "be-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "PRD review: db-reviewer",
+        "agent": "db-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "PRD review: fe-reviewer",
+        "agent": "fe-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "PRD review: ui-reviewer",
+        "agent": "ui-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "PRD review: skill-reviewer",
+        "agent": "skill-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "PRD fix",
+        "agent": "planner",
+        "model": "opus",
+        "verification": "diff read (final PRD reviewed by orchestrator)"
+      },
+      {
+        "step": "Plan draft",
+        "agent": "planner",
+        "model": "opus",
+        "verification": "reviewer panel"
+      },
+      {
+        "step": "Plan review: db-reviewer",
+        "agent": "db-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Plan review: be-reviewer",
+        "agent": "be-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Plan review: fe-reviewer",
+        "agent": "fe-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Plan review: skill-reviewer",
+        "agent": "skill-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Plan review: ui-reviewer",
+        "agent": "ui-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Plan fix",
+        "agent": "planner",
+        "model": "opus",
+        "verification": "diff read (final plan reviewed by orchestrator)"
+      },
+      {
+        "step": "Implementation: Group 1 (Kanban card number)",
+        "agent": "fe-coder",
+        "model": "sonnet",
+        "verification": "fe-reviewer + ng build"
+      },
+      {
+        "step": "Implementation: Group 2 (DB migration)",
+        "agent": "db-coder",
+        "model": "opus",
+        "verification": "db-reviewer + self-verified against real DB"
+      },
+      {
+        "step": "Implementation: Group 8 (seed title fix)",
+        "agent": "db-coder",
+        "model": "sonnet",
+        "verification": "db-reviewer"
+      },
+      {
+        "step": "Phase review (wave 1): fe-reviewer",
+        "agent": "fe-reviewer",
+        "model": "haiku",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Phase review (wave 1): db-reviewer",
+        "agent": "db-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Implementation: Group 3 (backend API)",
+        "agent": "be-coder",
+        "model": "sonnet",
+        "verification": "be-reviewer + tsc"
+      },
+      {
+        "step": "Implementation: Group 4 (frontend models/cross-links)",
+        "agent": "fe-coder",
+        "model": "sonnet",
+        "verification": "fe-reviewer + ng build + ng test"
+      },
+      {
+        "step": "Implementation: Group 7 (DB spec doc)",
+        "agent": "db-coder",
+        "model": "haiku",
+        "verification": "self-verified"
+      },
+      {
+        "step": "Phase review (wave 2): be-reviewer",
+        "agent": "be-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Phase review (wave 2): fe-reviewer",
+        "agent": "fe-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Implementation: Group 6 (API spec docs)",
+        "agent": "be-coder",
+        "model": "sonnet",
+        "verification": "self-verified"
+      },
+      {
+        "step": "Implementation: Group 9 (backend tests)",
+        "agent": "be-test-coder",
+        "model": "sonnet",
+        "verification": "be-test-reviewer + full suite run (385 pass)"
+      },
+      {
+        "step": "Implementation: Group 10 (frontend tests)",
+        "agent": "fe-test-coder",
+        "model": "sonnet",
+        "verification": "fe-test-reviewer + full suite run (535 pass)"
+      },
+      {
+        "step": "Test review (wave 3): be-test-reviewer",
+        "agent": "be-test-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Test review (wave 3): fe-test-reviewer",
+        "agent": "fe-test-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Review fix: fieldErrors assertion",
+        "agent": "be-test-coder",
+        "model": "haiku",
+        "verification": "test run"
+      },
+      {
+        "step": "Implementation: Group 5 (write-ticket skill)",
+        "agent": "skill-coder",
+        "model": "sonnet",
+        "verification": "skill-reviewer"
+      },
+      {
+        "step": "Verification: backend suite (Group 11)",
+        "agent": "be-test-runner",
+        "model": "haiku",
+        "verification": "n/a (test run); rerun directly by orchestrator after dev-server restart"
+      },
+      {
+        "step": "Verification: frontend suite (Group 12)",
+        "agent": "fe-test-runner",
+        "model": "haiku",
+        "verification": "n/a (test run)"
+      },
+      {
+        "step": "Manual acceptance and PRD sign-off (Group 13)",
+        "agent": "orchestrator (direct \u2014 ui-reviewer lacks Edit/Skill tools needed for this group)",
+        "model": "sonnet",
+        "verification": "live browser + API verification"
+      },
+      {
+        "step": "Code review Round 1: be-reviewer/be-test-reviewer/db-reviewer/fe-reviewer/fe-test-reviewer/ba-reviewer",
+        "agent": "6 reviewers (see REVIEW-ticket-ui-link-fixes.md)",
+        "model": "sonnet (default)",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Code review Round 1 fixes",
+        "agent": "db-coder, fe-coder",
+        "model": "haiku",
+        "verification": "Round 2 reviewer re-check"
+      },
+      {
+        "step": "Code review Round 2: ba-reviewer/fe-reviewer",
+        "agent": "ba-reviewer, fe-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Code review Round 2 fix",
+        "agent": "db-coder",
+        "model": "haiku",
+        "verification": "Round 3 reviewer re-check"
+      },
+      {
+        "step": "Code review Round 3: ba-reviewer",
+        "agent": "ba-reviewer",
+        "model": "sonnet",
+        "verification": "n/a (review, clean)"
+      },
+      {
+        "step": "Doc sync review (Step 12)",
+        "agent": "db-reviewer, be-reviewer, fe-reviewer, be-test-reviewer, fe-test-reviewer, ba-reviewer",
+        "model": "sonnet (default)",
+        "verification": "n/a (review)"
+      },
+      {
+        "step": "Doc sync apply (Step 12)",
+        "agent": "ba-writer",
+        "model": "sonnet (default)",
+        "verification": "diff read (orchestrator)"
+      }
+    ],
     "escalations": []
   },
   "completed_steps": []
