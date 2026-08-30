@@ -2993,6 +2993,8 @@ test.describe('POST /api/tickets — agentTaskId (link to app feedback)', () => 
       data: { type: 'FEATURE', title: 'Bad type (string)', body: 'String id.', agentTaskId: 'abc' },
     });
     expect(resp.status()).toBe(400);
+    const body = await resp.json() as ErrorBody;
+    expect(typeof body.fieldErrors?.['agentTaskId']).toBe('string');
   });
 
   test('create with a non-integer agentTaskId (float) → 400', async () => {
@@ -3000,6 +3002,8 @@ test.describe('POST /api/tickets — agentTaskId (link to app feedback)', () => 
       data: { type: 'FEATURE', title: 'Bad type (float)', body: 'Float id.', agentTaskId: 1.5 },
     });
     expect(resp.status()).toBe(400);
+    const body = await resp.json() as ErrorBody;
+    expect(typeof body.fieldErrors?.['agentTaskId']).toBe('string');
   });
 });
 
