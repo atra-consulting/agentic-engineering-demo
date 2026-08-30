@@ -253,7 +253,7 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
                 }
                 @if (ticket.agentTaskId) {
                   <dt class="text-muted">App-Feedback</dt>
-                  <dd><a routerLink="/admin/agent-tasks/{{ ticket.agentTaskId }}">App-Feedback #{{ ticket.agentTaskId }}</a></dd>
+                  <dd><a [routerLink]="['/admin/agent-tasks', ticket.agentTaskId]">App-Feedback #{{ ticket.agentTaskId }}</a></dd>
                 }
               </dl>
             </div>

@@ -42,7 +42,7 @@ import { AgentTaskService } from '../../../core/services/agent-task.service';
 
           @if (task.ticketId) {
             <dt class="col-sm-3">Ticket</dt>
-            <dd class="col-sm-9"><a routerLink="/admin/tickets/{{ task.ticketId }}">Ticket #{{ task.ticketId }}</a></dd>
+            <dd class="col-sm-9"><a [routerLink]="['/admin/tickets', task.ticketId]">Ticket #{{ task.ticketId }}</a></dd>
           }
 
           <dt class="col-sm-3">Aufgenommen am</dt>
