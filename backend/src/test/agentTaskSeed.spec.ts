@@ -181,6 +181,121 @@ test.describe.serial('seedAgentTasks — idempotent seeder', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Case 5 (REQ-302): corrective UPDATE converges an already-seeded row from
+  // the old English title to the new German one
+  // -------------------------------------------------------------------------
+  test('corrective UPDATE: id 23 carrying the old English title becomes German after one seedAgentTasks() call', async () => {
+    await test.step('ensure rows are seeded (in case prior test left them)', async () => {
+      await seedAgentTasks();
+      const count = await countRows('agent_task');
+      expect(count).toBe(23);
+    });
+
+    await test.step('simulate an already-seeded DB: force id 23 back to the old English title', async () => {
+      await client.execute({
+        sql: "UPDATE agent_task SET title = 'Improve chances' WHERE id = 23",
+        args: [],
+      });
+      const result = await client.execute({
+        sql: 'SELECT title FROM agent_task WHERE id = 23',
+        args: [],
+      });
+      expect(result.rows[0]?.['title']).toBe('Improve chances');
+    });
+
+    await test.step('seedAgentTasks() corrects id 23 to the German title', async () => {
+      await seedAgentTasks();
+      const result = await client.execute({
+        sql: 'SELECT title FROM agent_task WHERE id = 23',
+        args: [],
+      });
+      expect(result.rows[0]?.['title']).toBe('Chancen verbessern');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Case 6 (REQ-302): the corrective UPDATE converges once — a second run is
+  // a no-op, no error
+  // -------------------------------------------------------------------------
+  test('corrective UPDATE: a second seedAgentTasks() call is a no-op (title stays German, no error)', async () => {
+    // Continues directly from Case 5 above (serial suite): id 23 is already
+    // 'Chancen verbessern' at this point, so the WHERE clause in the
+    // corrective UPDATE ("... AND title = 'Improve chances'") no longer
+    // matches, and the second call affects zero rows.
+    const before = await client.execute({
+      sql: 'SELECT title FROM agent_task WHERE id = 23',
+      args: [],
+    });
+    expect(before.rows[0]?.['title']).toBe('Chancen verbessern');
+
+    await expect(seedAgentTasks()).resolves.toBeUndefined();
+
+    const after = await client.execute({
+      sql: 'SELECT title FROM agent_task WHERE id = 23',
+      args: [],
+    });
+    expect(after.rows[0]?.['title']).toBe('Chancen verbessern');
+  });
+
+  // -------------------------------------------------------------------------
+  // Case 7 (REQ-302): a human-renamed title (a third value, neither the old
+  // English nor the new German literal) survives the corrective UPDATE
+  // untouched — the WHERE clause matches only the exact old English literal
+  // -------------------------------------------------------------------------
+  test('corrective UPDATE: a human-renamed title (third value) survives seedAgentTasks() untouched', async () => {
+    await client.execute({
+      sql: "UPDATE agent_task SET title = 'Ein ganz anderer Titel' WHERE id = 23",
+      args: [],
+    });
+
+    await seedAgentTasks();
+
+    const result = await client.execute({
+      sql: 'SELECT title FROM agent_task WHERE id = 23',
+      args: [],
+    });
+    expect(result.rows[0]?.['title']).toBe('Ein ganz anderer Titel');
+  });
+
+  // -------------------------------------------------------------------------
+  // Case 8 (REQ-302): the correction only ever writes `title` — a DONE row
+  // keeps its status, resolvedAt, and comment
+  // -------------------------------------------------------------------------
+  test('corrective UPDATE: a DONE id-23 row keeps status, resolvedAt, and comment — only title is corrected', async () => {
+    const resolvedAt = '2026-07-01T12:00:00.000Z';
+    const comment = 'Erledigt im Sprint 14.';
+
+    await client.execute({
+      sql: `UPDATE agent_task
+            SET title = 'Improve chances', status = 'DONE', resolvedAt = ?, comment = ?
+            WHERE id = 23`,
+      args: [resolvedAt, comment],
+    });
+
+    await seedAgentTasks();
+
+    const result = await client.execute({
+      sql: 'SELECT title, status, resolvedAt, comment FROM agent_task WHERE id = 23',
+      args: [],
+    });
+    const row = result.rows[0];
+    if (!row) throw new Error('agent_task id 23 not found after seedAgentTasks()');
+
+    await test.step('title corrected to German', () => {
+      expect(row['title']).toBe('Chancen verbessern');
+    });
+    await test.step('status unchanged (still DONE)', () => {
+      expect(row['status']).toBe('DONE');
+    });
+    await test.step('resolvedAt unchanged', () => {
+      expect(row['resolvedAt']).toBe(resolvedAt);
+    });
+    await test.step('comment unchanged', () => {
+      expect(row['comment']).toBe(comment);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // afterAll: restore clean seeded state for subsequent suites
   // -------------------------------------------------------------------------
   test.afterAll(async () => {

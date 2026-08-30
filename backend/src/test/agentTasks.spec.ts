@@ -43,10 +43,20 @@ interface AgentTaskDTO {
   status: string;
   comment: string | null;
   metadata: string | null;
+  // Derived (not stored) — the newest ticket that carries this task's id in
+  // its own agentTaskId, or null when no ticket points at it. See the
+  // "Agent-task ↔ ticket link (ticketId)" suite below.
+  ticketId: number | null;
   pickedUpAt: string | null;
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Minimal shape read back from POST /api/tickets in the link suite below. */
+interface TicketCreateResponse {
+  id: number;
+  agentTaskId: number | null;
 }
 
 interface PageResult<T> {
@@ -939,5 +949,115 @@ test.describe('POST /api/agent-tasks/:id/start', () => {
     } finally {
       await proxyCtx.dispose();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite: Agent-task ↔ ticket link (ticketId, TICKET-UI-LINK-FIXES)
+// ---------------------------------------------------------------------------
+//
+// Isolation approach: resetDatabase() (used everywhere else in this file)
+// clears agent_task but does NOT clear ticket/ticket_comment, and its deletes
+// run with PRAGMA foreign_keys = OFF (see helpers.ts) — so it cannot be relied
+// on to clean up a ticket created here. Every test below therefore also calls
+// POST /api/tickets/reset (admin-only, deletes all tickets and reseeds
+// exactly TICKET_SEED_COUNT rows) in both beforeEach AND afterEach. This
+// isolates each test from tickets left behind by an earlier test in this
+// suite, AND — because this file (agentTasks.spec.ts) sorts alphabetically
+// BEFORE agentTaskSeed.spec.ts, ticketAgentTaskIdMigration.spec.ts,
+// ticketFullyReadyMigration.spec.ts, and tickets.spec.ts (see
+// playwright.config.ts: fullyParallel:false, workers:1) — restores the
+// `ticket` table to exactly its seeded rows before this file's tests finish.
+// ticketFullyReadyMigration.spec.ts's own test 4 asserts that exact row
+// count, so a ticket leaked from here would break an assertion in a
+// completely different file.
+test.describe('Agent-task ↔ ticket link (ticketId)', () => {
+  let admin: APIRequestContext;
+
+  test.beforeEach(async () => {
+    await resetDatabase();
+    admin = await loginCtx('admin', 'admin123');
+    const resetResp = await admin.post('/api/tickets/reset');
+    expect(resetResp.status()).toBe(200);
+  });
+
+  test.afterEach(async () => {
+    const resetResp = await admin.post('/api/tickets/reset');
+    expect(resetResp.status()).toBe(200);
+    await admin.dispose();
+  });
+
+  test('agent-task with a linked ticket reports the correct ticketId', async () => {
+    const createResp = await admin.post('/api/tickets', {
+      data: { type: 'BUG', title: 'Linked ticket', body: 'From feedback #1.', agentTaskId: 1 },
+    });
+    expect(createResp.status()).toBe(201);
+    const created = await createResp.json() as TicketCreateResponse;
+    expect(created.agentTaskId).toBe(1);
+
+    const taskResp = await admin.get('/api/agent-tasks/1');
+    expect(taskResp.status()).toBe(200);
+    const task = await taskResp.json() as AgentTaskDTO;
+    expect(task.ticketId).toBe(created.id);
+  });
+
+  test('agent-task with no linked ticket reports ticketId: null', async () => {
+    const taskResp = await admin.get('/api/agent-tasks/2');
+    expect(taskResp.status()).toBe(200);
+    const task = await taskResp.json() as AgentTaskDTO;
+    expect(task.ticketId).toBeNull();
+  });
+
+  test('two tickets pointing at the same agent-task → the newest ticket wins (createdAt desc, then id desc)', async () => {
+    const firstResp = await admin.post('/api/tickets', {
+      data: { type: 'BUG', title: 'First ticket', body: 'From feedback #3.', agentTaskId: 3 },
+    });
+    expect(firstResp.status()).toBe(201);
+    const first = await firstResp.json() as TicketCreateResponse;
+
+    const secondResp = await admin.post('/api/tickets', {
+      data: { type: 'BUG', title: 'Second ticket', body: 'From feedback #3.', agentTaskId: 3 },
+    });
+    expect(secondResp.status()).toBe(201);
+    const second = await secondResp.json() as TicketCreateResponse;
+
+    // Sequential awaited POSTs against an AUTOINCREMENT primary key: second.id
+    // is strictly greater than first.id, and second.createdAt is the same
+    // instant or later than first.createdAt. "Newest wins" (createdAt DESC,
+    // tie-broken by id DESC) must report the second ticket either way.
+    await test.step('second ticket has the higher id', () => {
+      expect(second.id).toBeGreaterThan(first.id);
+    });
+
+    const taskResp = await admin.get('/api/agent-tasks/3');
+    expect(taskResp.status()).toBe(200);
+    const task = await taskResp.json() as AgentTaskDTO;
+    await test.step('agent-task reports the newer (second) ticket', () => {
+      expect(task.ticketId).toBe(second.id);
+    });
+  });
+
+  test('POST /api/tickets/reset with a linked ticket present → 200, and the task then reports ticketId: null', async () => {
+    const createResp = await admin.post('/api/tickets', {
+      data: { type: 'BUG', title: 'To be reset away', body: 'From feedback #4.', agentTaskId: 4 },
+    });
+    expect(createResp.status()).toBe(201);
+
+    const beforeResp = await admin.get('/api/agent-tasks/4');
+    expect(beforeResp.status()).toBe(200);
+    const before = await beforeResp.json() as AgentTaskDTO;
+    await test.step('precondition: task 4 is linked before reset', () => {
+      expect(before.ticketId).not.toBeNull();
+    });
+
+    const resetResp = await admin.post('/api/tickets/reset');
+    await test.step('reset status 200', () => { expect(resetResp.status()).toBe(200); });
+
+    const afterResp = await admin.get('/api/agent-tasks/4');
+    expect(afterResp.status()).toBe(200);
+    const after = await afterResp.json() as AgentTaskDTO;
+    await test.step('task 4 reports ticketId: null after reset', () => {
+      expect(after.ticketId).toBeNull();
+    });
   });
 });
