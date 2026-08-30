@@ -2,8 +2,8 @@
 name: "project:write-ticket"
 description: "Headless autonomous skill that claims one agent-task feedback item (or takes a task ID, a task URL, or free-floating feedback text), judges it, and files a new Kanban ticket (Definition, owner HUMAN) from it — commenting on the ticket to demand missing info when the feedback is too thin. Never builds, pushes, or opens a PR."
 argument-hint: "[task-id | task-url | feedback-text]"
-version: 1.5.0
-last-modified: 2026-08-02
+version: 1.6.0
+last-modified: 2026-08-30
 allowed-tools:
   - Read
   - Bash
@@ -168,11 +168,11 @@ Für `fullyReady`: Setze auf `true`, wenn das Urteil aus Schritt 2 „gut genug 
 curl -s -w '\n%{http_code}' -X POST \
   -H "Authorization: Bearer $AGENT_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"type": "<Typ aus Schritt 2, Default FEATURE>", "title": "<Titel aus dem Feedback>", "body": "<Markdown-Vorlage: #### Feedback, dann #### Fachlich (für Business), dann #### Technisch (für Entwickler), dann #### Akzeptanzkriterien>", "fullyReady": <true bei „gut genug zum Bauen", sonst false>}' \
+  -d '{"type": "<Typ aus Schritt 2, Default FEATURE>", "title": "<Titel aus dem Feedback>", "body": "<Markdown-Vorlage: #### Feedback, dann #### Fachlich (für Business), dann #### Technisch (für Entwickler), dann #### Akzeptanzkriterien>", "fullyReady": <true bei „gut genug zum Bauen", sonst false>, "agentTaskId": <Agent-Task-ID bei Queue-, ID- oder URL-Modus, sonst null>}' \
   "${APP_BASE_URL:-http://localhost:7070}/api/tickets"
 ```
 
-**Wichtig:** Der komplette mehrteilige Body — alle vier Abschnitte, inklusive Zeilenumbrüche und Zitat-Markup (`>`) — muss vollständig als JSON-String escaped werden, bevor er in `-d` landet. Sonst ist das JSON ungültig. `fullyReady` dagegen ist ein reines JSON-Boolean (`true` oder `false`, ohne Anführungszeichen) — wird NICHT als String escaped, im Gegensatz zu `type`/`title`/`body`.
+**Wichtig:** Der komplette mehrteilige Body — alle vier Abschnitte, inklusive Zeilenumbrüche und Zitat-Markup (`>`) — muss vollständig als JSON-String escaped werden, bevor er in `-d` landet. Sonst ist das JSON ungültig. `fullyReady` dagegen ist ein reines JSON-Boolean (`true` oder `false`, ohne Anführungszeichen) — wird NICHT als String escaped, im Gegensatz zu `type`/`title`/`body`. Genauso `agentTaskId`: eine reine JSON-Zahl (die ID der beanspruchten Agent-Task, im Queue-, ID- oder URL-Modus — dieselbe Task, die auch die `Quelle:`-Zeile oben liefert) oder `null` (Freitext-Modus, es gibt keine Agent-Task) — ohne Anführungszeichen, nie als String escaped.
 
 Body und HTTP-Code separat aus der Ausgabe lesen (`body` = alles vor der letzten Zeile, `http_code` = letzte Zeile).
 
