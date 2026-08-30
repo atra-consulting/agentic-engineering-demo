@@ -174,8 +174,8 @@ All error responses follow:
 | `adressen-typ.spec.ts` | GET/POST/PUT `/api/adressen` — `typ` field (WORK, HOME, null) |
 | `adressen-search.spec.ts` | GET `/api/adressen?search=<term>` — city substring match, case-insensitive, empty-result handling, anon 401 |
 | `aktivitaeten-crud.spec.ts` | GET `/api/aktivitaeten` (paginated) and `/all`, POST/PUT/DELETE `/api/aktivitaeten/:id` — full CRUD, `datum` DESC sort, 404 on unknown id, anon 401 |
-| `agentTasks.spec.ts` | GET `/api/agent-tasks/next`, POST `/:id/reject`, POST `/:id/done`, GET `/api/agent-tasks`, GET `/api/agent-tasks/summary`, POST `/api/agent-tasks/reset` |
-| `agentTaskSeed.spec.ts` | `seedAgentTasks()` idempotency — 23 fixed-ID rows survive repeated seeding; per-source counts (7 EMAIL / 4 GITHUB_ISSUE / 6 APP_LOG / 6 ERROR_REPORT); `AGENT_TASK_SEED` row 23 reworded title/subject/body (Chancen-Notiz), asserted against the exported constant, not the live DB |
+| `agentTasks.spec.ts` | GET `/api/agent-tasks/next`, POST `/:id/reject`, POST `/:id/done`, GET `/api/agent-tasks`, GET `/api/agent-tasks/summary`, POST `/api/agent-tasks/reset`; derived ticketId on GET /:id — linked/unlinked, newest-ticket-wins tie-break, cleared to null by POST /api/tickets/reset |
+| `agentTaskSeed.spec.ts` | `seedAgentTasks()` idempotency — 23 fixed-ID rows survive repeated seeding; per-source counts (7 EMAIL / 4 GITHUB_ISSUE / 6 APP_LOG / 6 ERROR_REPORT); row 23's title/subject/body (Chancen-Notiz) verified against the exported `AGENT_TASK_SEED` constant; separately, the one-time corrective UPDATE that converges an already-seeded row 23 from the old English title to German is verified against the live DB — convergence, idempotent no-op on a second call, a human-renamed title survives untouched, and a DONE row keeps status/resolvedAt/comment (only `title` is corrected) |
 | `chancen-phase-filter.spec.ts` | GET `/api/chancen?phase=<value>` — per-phase filtering and invalid-phase 400 |
 | `chancen-search.spec.ts` | GET `/api/chancen?search=<term>` — case-insensitive title search, combined search+phase filter |
 | `cron.spec.ts` | GET `/api/cron/agent-tasks`, POST `/api/cron/runs/:id/complete`, GET `/api/cron/runs`, GET `/api/cron/jobs` |
@@ -183,7 +183,8 @@ All error responses follow:
 | `personen-filter.spec.ts` | GET `/api/personen?abteilungId=<id>` — department filter, combined abteilungId+search |
 | `sessions-persistence.spec.ts` | Session row creation on login, cross-request persistence, DB row deletion on logout |
 | `szenario.spec.ts` | GET/POST/PUT/DELETE `/api/szenarien` and `/:id` — CRUD, works/waits JSON round-trip, array-length and duration-bound validation, duplicate-name 409, seeded Standard-Szenario (id=1) |
-| `tickets.spec.ts` | Kanban lifecycle across `/api/tickets` — `/next`, `/:id/start`, `/:id/done`, `/:id/ask`, `/:id/comments`, `/:id/wont-do`, PATCH `/:id/status` and `/:id/owner`, POST `/api/tickets`, `/:id/hand-to-ai`, `/board`, `/summary`, `/reset` — auth matrix: agent-token-or-admin-session on start/done/ask/board/status/owner/comments/create/GET :id; `/next` stays agent-token-only (GET-based CSRF surface) |
+| `ticketAgentTaskIdMigration.spec.ts` | Guarded `ticket.agentTaskId` column migration (`ensureTicketAgentTaskIdColumn`/`alterTicketAddAgentTaskIdColumn`) — repeat-call safety, duplicate-column ALTER swallowed, narrow re-throw on a genuinely different SQL error, full `runMigrations()` ordering-regression guard that recovers a simulated pre-fix DB (index + column both dropped), fresh-DB column shape (nullable, no DEFAULT), seeded rows read `agentTaskId = null` |
+| `tickets.spec.ts` | Kanban lifecycle across `/api/tickets` — `/next`, `/:id/start`, `/:id/done`, `/:id/ask`, `/:id/comments`, `/:id/wont-do`, PATCH `/:id/status` and `/:id/owner`, POST `/api/tickets`, `/:id/hand-to-ai`, `/board`, `/summary`, `/reset` — auth matrix: agent-token-or-admin-session on start/done/ask/board/status/owner/comments/create/GET :id; `/next` stays agent-token-only (GET-based CSRF surface); agentTaskId (link to app feedback, REQ-207) — create default/null/valid-id/unknown-id(400)/non-integer(400), round-trip across GET /:id, list, /board, /next, untouched by all 8 write endpoints |
 
 ---
 
@@ -288,12 +289,12 @@ For components using `inject()` that cannot be overridden by a provider, use `Te
 | `features/person/person-list/person-list.component.spec.ts` | `PersonListComponent` — render, data binding, interactions |
 | `features/aktivitaet/aktivitaet-list/aktivitaet-list.component.spec.ts` | `AktivitaetListComponent` — render, data binding, interactions |
 | `features/chance/chance-list/chance-list.component.spec.ts` | `ChanceListComponent` — render, data binding, interactions |
-| `features/admin/agent-tasks/agent-task-detail.component.spec.ts` | `AgentTaskDetailComponent` — detail view, `statusBadgeClass()` |
+| `features/admin/agent-tasks/agent-task-detail.component.spec.ts` | `AgentTaskDetailComponent` — detail view, `statusBadgeClass()`, ticket cross-link (renders Ticket #<id> link only when ticketId is set) |
 | `features/admin/agent-tasks/agent-task-list.component.spec.ts` | `AgentTaskListComponent` — list view, source param, `statusBadgeClass()` |
 | `features/admin/agent-tasks/agent-tasks-dashboard.component.spec.ts` | `AgentTasksDashboardComponent` — summary and per-source views |
 | `features/admin/cron/cron-dashboard.component.spec.ts` | `CronDashboardComponent` — ngOnInit, pagination, runNow() |
-| `features/admin/tickets/ticket-board.component.spec.ts` | `TicketBoardComponent` — board loading, drag-and-drop status transitions with rollback, badge helpers, recentOnly ("Kürzlich geändert") filter toggle with sessionStorage persistence |
-| `features/admin/tickets/ticket-detail.component.spec.ts` | `TicketDetailComponent` — detail view, comment/hand-back-to-AI flow, "Won't Do" and owner-toggle actions |
+| `features/admin/tickets/ticket-board.component.spec.ts` | `TicketBoardComponent` — board loading, drag-and-drop status transitions with rollback, badge helpers, recentOnly ("Kürzlich geändert") filter toggle with sessionStorage persistence, .ticket-number (#<id>) badge on each card |
+| `features/admin/tickets/ticket-detail.component.spec.ts` | `TicketDetailComponent` — detail view, comment/hand-back-to-AI flow, "Won't Do" and owner-toggle actions, agent-task cross-link (renders App-Feedback #<id> link only when agentTaskId is set) |
 | `features/produktivitaet/einheit.spec.ts` | Zeiteinheit helpers — `einheitZuFaktor`, `feldWertZuMinuten`, `maxWertFuerEinheit`, `durationValidatorsFor`, round-trip conversion |
 | `features/produktivitaet/rechner.component.spec.ts` | `RechnerComponent` — productivity calculator: unit conversion, scenario load/save, role/pie/flowchart derivations, Prozessvergleich bar filter (barLimit) with sessionStorage persistence (explicit-toggle-only, not incidental widening) |
 | `features/produktivitaet/svg-util.spec.ts` | SVG utility functions — `computeSegments`, `computeComparisonBars`, `computePieSlices` |
