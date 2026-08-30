@@ -92,6 +92,79 @@ export async function ensureTicketFullyReadyColumn(): Promise<void> {
   await alterTicketAddFullyReadyColumn();
 }
 
+// Idempotent guarded ALTER for existing databases created before agentTaskId
+// existed (the ticket -> agent_task back-link). `CREATE TABLE IF NOT EXISTS`
+// never touches an already-existing table, so upgraded DBs — every local
+// SQLite file and the deployed Turso database — need this column added
+// explicitly. No `--reset-db` required.
+//
+// Two hard SQLite constraints shape the statement below:
+//   1. NO `DEFAULT` clause and NO `NOT NULL`. SQLite refuses an
+//      `ALTER TABLE ... ADD COLUMN` carrying a `REFERENCES` clause unless the
+//      new column's default is NULL. The implicit NULL default is the only
+//      legal choice here, and the `CREATE TABLE` definition above matches it.
+//   2. SQLite has no `ADD COLUMN IF NOT EXISTS`.
+//
+// The ALTER step is split into its own exported function so the migration test
+// suite can fire the ALTER directly against a table that already has the
+// column, without relying on real concurrency timing to hit the catch block.
+//
+// The try/catch swallowing "duplicate column" is a concurrent-cold-start
+// guard: on Vercel, multiple serverless instances can cold-start concurrently
+// against the same Turso DB (each has its own `initPromise`, not shared
+// cross-instance — see `api/index.ts`). Two instances can both pass the
+// `table_info` check in ensureTicketAgentTaskIdColumn() and both attempt the
+// ALTER; the loser fails with "duplicate column name". Swallow only that
+// error — mirrors alterTicketAddFullyReadyColumn() above — and re-throw
+// anything else so a real migration failure is never hidden.
+export async function alterTicketAddAgentTaskIdColumn(): Promise<void> {
+  try {
+    await client.execute(
+      'ALTER TABLE ticket ADD COLUMN agentTaskId INTEGER REFERENCES agent_task(id) ON DELETE SET NULL'
+    );
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('duplicate column')) {
+      return;
+    }
+    throw err;
+  }
+}
+
+// NOTE — this helper deliberately does NOT copy the early `return` shape of
+// ensureTicketFullyReadyColumn() above, and the index below deliberately does
+// NOT live in the shared `CREATE INDEX` batch in runMigrations().
+//
+// Why not the shared index batch: that batch runs BEFORE the guarded ALTER
+// helpers. On any database that already has a `ticket` table without this
+// column — i.e. every existing local SQLite file and the deployed Turso
+// database — `CREATE INDEX ... ON ticket(agentTaskId)` would fail there with
+// "no such column: agentTaskId". That is not a "duplicate column" error, so no
+// guard swallows it: runMigrations() throws and the backend never starts.
+//
+// Why no early return: the ALTER is conditional, but the index must be created
+// on EVERY call, down BOTH paths. A fresh DB already has the column from
+// `CREATE TABLE` and so takes the "column already present" path — an early
+// return there would mean a fresh DB never gets the index at all.
+export async function ensureTicketAgentTaskIdColumn(): Promise<void> {
+  // Standalone execute (not batched) — PRAGMA statements are ignored inside a
+  // transaction/batch, same reasoning as the PRAGMA foreign_keys call above.
+  const info = await client.execute('PRAGMA table_info(ticket)');
+  const hasColumn = info.rows.some((row) => row.name === 'agentTaskId');
+
+  if (!hasColumn) {
+    await alterTicketAddAgentTaskIdColumn();
+  }
+
+  // Unconditional, and only reachable once the column is guaranteed to exist:
+  // either it was already there, or the ALTER above just added it (or swallowed
+  // a concurrent instance's "duplicate column", which also means it is there).
+  // Any other ALTER failure re-throws before this line. `IF NOT EXISTS` keeps
+  // repeat calls cheap and safe.
+  await client.execute(
+    'CREATE INDEX IF NOT EXISTS idx_ticket_agentTaskId ON ticket(agentTaskId)'
+  );
+}
+
 export async function runMigrations(): Promise<void> {
   console.log('Running database migrations...');
 
@@ -217,6 +290,13 @@ export async function runMigrations(): Promise<void> {
       status      TEXT NOT NULL DEFAULT 'DEFINITION' CHECK (status IN ('DEFINITION','TODO','IN_PROGRESS','ON_HOLD','DONE')),
       solution    TEXT,
       fullyReady  INTEGER NOT NULL DEFAULT 0,
+      -- Link back to the app-feedback item this ticket came from. Nullable with
+      -- an implicit NULL default and NO explicit DEFAULT clause on purpose:
+      -- ensureTicketAgentTaskIdColumn() adds the very same column to
+      -- pre-existing tables via ALTER TABLE, and SQLite rejects an ADD COLUMN
+      -- carrying a REFERENCES clause unless its default is NULL. Keeping both
+      -- definitions identical means a fresh DB and an upgraded DB agree.
+      agentTaskId INTEGER REFERENCES agent_task(id) ON DELETE SET NULL,
       pickedUpAt  TEXT,
       resolvedAt  TEXT,
       createdAt   TEXT NOT NULL DEFAULT (datetime('now')),
@@ -287,6 +367,11 @@ export async function runMigrations(): Promise<void> {
   // (e.g. DONE/REJECTED/IN_PROGRESS) are never overwritten.
   await seedAgentTasks();
   await ensureTicketFullyReadyColumn();
+  // Adds the column when missing, then always (re-)ensures its index. That
+  // index lives inside the helper, NOT in the shared index batch above — the
+  // batch runs before this line, when the column may not exist yet. See the
+  // comment on ensureTicketAgentTaskIdColumn().
+  await ensureTicketAgentTaskIdColumn();
   await seedTickets();
   await ensureSzenarioAgileKiColumn();
   await seedSzenario();
