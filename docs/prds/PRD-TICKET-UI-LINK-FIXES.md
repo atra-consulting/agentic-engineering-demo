@@ -318,25 +318,48 @@ Explicitly excluded from this work. Not oversights.
 
 ## Success Criteria
 
-- [ ] Every card in all five board columns shows its ticket number, and drag, click, and keyboard navigation still work.
-- [ ] The number sits inside the existing clickable card region, in DOM reading order, at 4.5:1 contrast or better.
-- [ ] `ticket` has a nullable, indexed `agentTaskId` column with a foreign key to `agent_task`.
-- [ ] An existing local database and Turso pick the column up on a plain restart — the backend starts, no `--reset-db`, no `no such column` error.
-- [ ] `POST /api/tickets` accepts `agentTaskId`, rejects an unknown id with `400`, and creates no orphan ticket on that path.
-- [ ] Every ticket response returns `agentTaskId` — including `/wont-do` and `/hand-to-ai`. Every agent-task response returns the derived `ticketId`.
-- [ ] Two tickets on one task → the agent task reports the newest.
-- [ ] `/admin/tickets/:id` links to its feedback from the Info sidebar, and `/admin/agent-tasks/:id` links to its ticket. Same visual pattern both sides. Both hide the link when there is none. Both use `routerLink`.
-- [ ] `write-ticket` sends the claimed id in queue, id, and URL modes, and `null` in free-text mode. Version reads 1.6.0.
-- [ ] `/admin/agent-tasks/23` reads "Chancen verbessern" on a fresh database and on an already-seeded one.
-- [ ] Re-running startup twice changes no agent-task data.
-- [ ] `SPEC-API-TICKETS.md` (field tables *and* the create example payload), `SPEC-API-TASKS.md`, and `SPECS-database.md` describe the link.
-- [ ] Full backend Playwright suite and full frontend Karma suite green.
+- [x] Every card in all five board columns shows its ticket number, and drag, click, and keyboard navigation still work. Verified in-browser: `#1`–`#12` visible on every card in all five columns; Tab focuses the card region once; Enter and Space both open the detail page without a page scroll.
+- [x] The number sits inside the existing clickable card region, in DOM reading order, at 4.5:1 contrast or better. `#6c757d` on white computes to ≈4.6:1; confirmed by ui-reviewer during plan review.
+- [x] `ticket` has a nullable, indexed `agentTaskId` column with a foreign key to `agent_task`. Commit `8f9c582`.
+- [x] An existing local database and Turso pick the column up on a plain restart — the backend starts, no `--reset-db`, no `no such column` error. Verified live: killed and restarted the dev backend against the existing (non-reset) local SQLite file; it started cleanly and migrated in place.
+- [x] `POST /api/tickets` accepts `agentTaskId`, rejects an unknown id with `400`, and creates no orphan ticket on that path. Commit `e81d97a`; covered by automated tests in `5aa2981`.
+- [x] Every ticket response returns `agentTaskId` — including `/wont-do` and `/hand-to-ai`. Every agent-task response returns the derived `ticketId`. Verified live via the real `POST /api/tickets` and `GET /api/agent-tasks/:id` calls made during manual acceptance (ticket #13 ↔ agent-task #1).
+- [x] Two tickets on one task → the agent task reports the newest. Covered by an automated test in `5aa2981` (newest-wins, `createdAt DESC, id DESC`).
+- [x] `/admin/tickets/:id` links to its feedback from the Info sidebar, and `/admin/agent-tasks/:id` links to its ticket. Same visual pattern both sides. Both hide the link when there is none. Both use `routerLink`. Verified in-browser both directions (ticket #13 → App-Feedback #1 → Ticket #13), and the negative case (seeded ticket #1 and agent-task #23, both unlinked, show no extra row).
+- [x] `write-ticket` sends the claimed id in queue, id, and URL modes, and `null` in free-text mode. Version reads 1.6.0. Verified by running the skill live in queue mode (created ticket #13 with `agentTaskId: 1`) and in free-text mode (created a ticket with `agentTaskId: null`, then removed via reset). Commit `3ffe48c`.
+- [x] `/admin/agent-tasks/23` reads "Chancen verbessern" on a fresh database and on an already-seeded one. Verified in-browser on the existing (already-seeded) local database, without `--reset-db`. Commit `076332d`.
+- [x] Re-running startup twice changes no agent-task data. Covered by an automated test in `5aa2981`.
+- [x] `SPEC-API-TICKETS.md` (field tables *and* the create example payload), `SPEC-API-TASKS.md`, and `SPECS-database.md` describe the link. Commits `3087b60`, `8278f89`.
+- [x] Full backend Playwright suite and full frontend Karma suite green. 385/385 backend, 535/535 frontend, both confirmed with a live run after all implementation and review rounds.
 
 ## Open Questions
 
-1. Exact placement of the ticket number on the card — muted prefix on the title line, its own small line above the title, or a badge beside the type and owner badges? Needs a UI decision; `SPECS-ui.md` has no card-level convention today. (The a11y and contrast constraints in REQ-101/102 hold for every option.)
-2. Exact visual treatment of the two cross-links — inline text link, outline button, or a row in the existing `dl` block? Whatever wins must be used on **both** pages (REQ-206), and on the ticket page it lives in the right-sidebar "Info" block either way.
-3. Should `POST /api/tickets` validate anything beyond "the agent-task id exists"? For example: reject an id already linked to another ticket, or reject one whose status is terminal (`DONE` / `REJECTED`). REQ-203 ships existence-only, which is a reasonable default — but nobody has decided this on purpose until now, so it needs a product answer rather than an assumption. Note REQ-205 already tolerates duplicates by design ("newest wins").
+1. ~~Exact placement of the ticket number on the card~~ **Resolved during implementation:** its own small muted line directly above the title, inside the existing clickable region, colour `#6c757d`. See `PLAN-TICKET-UI-LINK-FIXES.md` task group 1.
+2. Exact visual treatment of the two cross-links — inline text link, outline button, or a row in the existing `dl` block? Whatever wins must be used on **both** pages (REQ-206), and on the ticket page it lives in the right-sidebar "Info" block either way. **Resolved during implementation:** a `dl` row holding an inline text link, used identically on both the ticket and agent-task detail pages.
+3. Should `POST /api/tickets` validate anything beyond "the agent-task id exists"? For example: reject an id already linked to another ticket, or reject one whose status is terminal (`DONE` / `REJECTED`). REQ-203 ships existence-only, which is a reasonable default — but nobody has decided this on purpose until now, so it needs a product answer rather than an assumption. Note REQ-205 already tolerates duplicates by design ("newest wins"). **Still open** — shipped as existence-only per REQ-203; a future ticket can revisit this if it becomes a real problem.
+
+## Implementierung
+
+Branch: `ticket-ui-link-fixes`.
+
+Commits:
+- `3d6ea0c` docs: Initialize state tracking
+- `9434462` docs: Add specifications (PRD)
+- `0db84ed` docs: Document backend and frontend test commands in AGENTS.md
+- `bf1d89f` docs: Add detailed plan
+- `076332d` fix: Correct agent-task 23 title to German, with idempotent update for existing databases
+- `8f9c582` feat: Add ticket.agentTaskId column with guarded migration
+- `ee2bc11` feat: Show ticket number on Kanban board card
+- `8278f89` docs: Document ticket.agentTaskId column and index in SPECS-database.md
+- `e81d97a` feat: Add agentTaskId/ticketId to ticket and agent-task API responses
+- `83c24d3` feat: Add agentTaskId/ticketId to frontend models and render cross-links
+- `3087b60` docs: Document agentTaskId/ticketId fields in ticket and agent-task API specs
+- `946c542` test: Add frontend tests for card number and cross-links
+- `5aa2981` test: Add backend tests for ticket-agentTask link and migration ordering
+- `e530573` fix: Assert fieldErrors.agentTaskId on non-integer validation tests
+- `3ffe48c` feat: Have write-ticket skill send agentTaskId when creating a linked ticket
+
+PR: see the pull request opened from `ticket-ui-link-fixes` against `main`.
 
 ## Technical Notes
 
