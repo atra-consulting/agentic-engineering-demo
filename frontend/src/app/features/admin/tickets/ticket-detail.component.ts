@@ -251,6 +251,10 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
                   <dt class="text-muted">Lösung</dt>
                   <dd><span [class]="solutionBadgeClass(ticket.solution)">{{ solutionLabel(ticket.solution) }}</span></dd>
                 }
+                @if (ticket.agentTaskId) {
+                  <dt class="text-muted">App-Feedback</dt>
+                  <dd><a [routerLink]="['/admin/agent-tasks', ticket.agentTaskId]">App-Feedback #{{ ticket.agentTaskId }}</a></dd>
+                }
               </dl>
             </div>
           </div>

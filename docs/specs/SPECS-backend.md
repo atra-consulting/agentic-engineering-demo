@@ -29,6 +29,7 @@ Table definitions and column specs: see [SPECS-database.md](SPECS-database.md).
 Computed DTO fields (not stored in DB):
 
 - **Firma** DTO adds `personenCount`, `abteilungenCount` (subquery counts).
+- **AgentTask** DTO adds `ticketId` — the newest ticket whose `agentTaskId` points back at this task (correlated subquery, tie-broken by highest ticket id).
 
 ## API Endpoints
 
@@ -313,7 +314,7 @@ src/
   seed/
     dataMigration.ts  — loads fixture.json into the DB when empty (CRM entities only)
     fixture.json      — fixed seed data (25 Firmen, 50 Abteilungen, 100 Personen, 100 Adressen, 75 Aktivitaeten, 40 Chancen)
-    agentTaskSeed.ts  — idempotent agent_task seeding (INSERT OR IGNORE, ids 1–16); called at end of runMigrations()
+    agentTaskSeed.ts  — idempotent agent_task seeding (INSERT OR IGNORE, ids 1–16) plus a guarded one-time corrective UPDATE for drifted seed rows; called at end of runMigrations()
     build-fixture.ts  — dev tool to regenerate fixture.json after schema changes (not called at runtime)
 ```
 

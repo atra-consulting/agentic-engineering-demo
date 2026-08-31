@@ -11,6 +11,7 @@ export interface AgentTaskDTO {
   status: string;
   comment: string | null;
   metadata: string | null;
+  ticketId: number | null;
   pickedUpAt: string | null;
   resolvedAt: string | null;
   createdAt: string;
@@ -25,11 +26,21 @@ interface AgentTaskRow {
   status: string;
   comment: string | null;
   metadata: string | null;
+  ticketId: number | null;
   pickedUpAt: string | null;
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+// Correlated subquery: the newest ticket that links back to this agent task.
+// "Newest" = highest createdAt, tie-broken by highest id.
+const TICKET_ID_SUBQUERY = `(
+  SELECT t.id FROM ticket t
+  WHERE t.agentTaskId = agent_task.id
+  ORDER BY t.createdAt DESC, t.id DESC
+  LIMIT 1
+) AS ticketId`;
 
 export interface AgentTaskSummaryDTO {
   source: string;
@@ -48,6 +59,7 @@ function toDTO(row: AgentTaskRow): AgentTaskDTO {
     status: row.status,
     comment: row.comment,
     metadata: row.metadata,
+    ticketId: row.ticketId !== null && row.ticketId !== undefined ? Number(row.ticketId) : null,
     pickedUpAt: row.pickedUpAt,
     resolvedAt: row.resolvedAt,
     createdAt: row.createdAt,
@@ -70,12 +82,14 @@ export const agentTaskService = {
       args: [now, now, source],
     });
     const row = result.rows[0] as unknown as AgentTaskRow | undefined;
-    return row ? toDTO(row) : null;
+    if (!row) return null;
+    // Re-fetch via findById so the derived ticketId subquery runs (RETURNING * lacks it).
+    return this.findById(row.id);
   },
 
   async findById(id: number): Promise<AgentTaskDTO> {
     const result = await client.execute({
-      sql: 'SELECT * FROM agent_task WHERE id = ?',
+      sql: `SELECT *, ${TICKET_ID_SUBQUERY} FROM agent_task WHERE id = ?`,
       args: [id],
     });
     const row = result.rows[0] as unknown as AgentTaskRow | undefined;
@@ -158,7 +172,7 @@ export const agentTaskService = {
     const total = Number(countRow.cnt);
 
     const rowsResult = await client.execute({
-      sql: `SELECT * FROM agent_task ${where} ORDER BY ${sort.field} ${sort.direction} LIMIT ? OFFSET ?`,
+      sql: `SELECT *, ${TICKET_ID_SUBQUERY} FROM agent_task ${where} ORDER BY ${sort.field} ${sort.direction} LIMIT ? OFFSET ?`,
       args: [...args, size, page * size],
     });
     const rows = rowsResult.rows as unknown as AgentTaskRow[];

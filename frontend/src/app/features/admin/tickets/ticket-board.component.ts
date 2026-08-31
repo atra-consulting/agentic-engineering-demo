@@ -219,6 +219,7 @@ import { TicketCreateComponent } from './ticket-create.component';
                   <fa-icon [icon]="faGripVertical" />
                 </div>
                 <div class="ticket-body-click" role="button" tabindex="0" (click)="navigateToDetail(ticket.id)" (keydown.enter)="navigateToDetail(ticket.id)" (keydown.space)="$event.preventDefault(); navigateToDetail(ticket.id)">
+                  <div class="ticket-number">#{{ ticket.id }}</div>
                   <div class="ticket-title">{{ ticket.title }}</div>
                   <div class="ticket-badges mt-2">
                     <span [class]="typeBadgeClass(ticket.type)">{{ typeLabel(ticket.type) }}</span>
@@ -261,6 +262,7 @@ import { TicketCreateComponent } from './ticket-create.component';
                   <fa-icon [icon]="faGripVertical" />
                 </div>
                 <div class="ticket-body-click" role="button" tabindex="0" (click)="navigateToDetail(ticket.id)" (keydown.enter)="navigateToDetail(ticket.id)" (keydown.space)="$event.preventDefault(); navigateToDetail(ticket.id)">
+                  <div class="ticket-number">#{{ ticket.id }}</div>
                   <div class="ticket-title">{{ ticket.title }}</div>
                   <div class="ticket-badges mt-2">
                     <span [class]="typeBadgeClass(ticket.type)">{{ typeLabel(ticket.type) }}</span>
@@ -303,6 +305,7 @@ import { TicketCreateComponent } from './ticket-create.component';
                   <fa-icon [icon]="faGripVertical" />
                 </div>
                 <div class="ticket-body-click" role="button" tabindex="0" (click)="navigateToDetail(ticket.id)" (keydown.enter)="navigateToDetail(ticket.id)" (keydown.space)="$event.preventDefault(); navigateToDetail(ticket.id)">
+                  <div class="ticket-number">#{{ ticket.id }}</div>
                   <div class="ticket-title">{{ ticket.title }}</div>
                   <div class="ticket-badges mt-2">
                     <span [class]="typeBadgeClass(ticket.type)">{{ typeLabel(ticket.type) }}</span>
@@ -345,6 +348,7 @@ import { TicketCreateComponent } from './ticket-create.component';
                   <fa-icon [icon]="faGripVertical" />
                 </div>
                 <div class="ticket-body-click" role="button" tabindex="0" (click)="navigateToDetail(ticket.id)" (keydown.enter)="navigateToDetail(ticket.id)" (keydown.space)="$event.preventDefault(); navigateToDetail(ticket.id)">
+                  <div class="ticket-number">#{{ ticket.id }}</div>
                   <div class="ticket-title">{{ ticket.title }}</div>
                   <div class="ticket-badges mt-2">
                     <span [class]="typeBadgeClass(ticket.type)">{{ typeLabel(ticket.type) }}</span>
@@ -387,6 +391,7 @@ import { TicketCreateComponent } from './ticket-create.component';
                   <fa-icon [icon]="faGripVertical" />
                 </div>
                 <div class="ticket-body-click" role="button" tabindex="0" (click)="navigateToDetail(ticket.id)" (keydown.enter)="navigateToDetail(ticket.id)" (keydown.space)="$event.preventDefault(); navigateToDetail(ticket.id)">
+                  <div class="ticket-number">#{{ ticket.id }}</div>
                   <div class="ticket-title">{{ ticket.title }}</div>
                   <div class="ticket-badges mt-2">
                     <span [class]="typeBadgeClass(ticket.type)">{{ typeLabel(ticket.type) }}</span>
@@ -641,6 +646,13 @@ import { TicketCreateComponent } from './ticket-create.component';
 
       .cdk-drop-list-dragging .ticket-card:not(.cdk-drag-placeholder) {
         transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+      }
+
+      .ticket-number {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #6c757d;
+        margin-bottom: 0.2rem;
       }
 
       .ticket-title {

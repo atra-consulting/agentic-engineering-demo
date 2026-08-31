@@ -129,6 +129,13 @@ export const ticket = sqliteTable('ticket', {
   status: text('status', { enum: TICKET_STATUS }).notNull().default('DEFINITION'),
   solution: text('solution'),
   fullyReady: integer('fullyReady', { mode: 'boolean' }).notNull().default(false),
+  // Nullable back-link to the app-feedback item this ticket came from. No
+  // default: the matching ALTER TABLE in config/migrate.ts must leave the
+  // default NULL, because SQLite rejects an ADD COLUMN with a REFERENCES
+  // clause and a non-NULL default.
+  agentTaskId: integer('agentTaskId').references(() => agentTask.id, {
+    onDelete: 'set null',
+  }),
   pickedUpAt: text('pickedUpAt'),
   resolvedAt: text('resolvedAt'),
   createdAt: text('createdAt').notNull().default(sql`(datetime('now'))`),

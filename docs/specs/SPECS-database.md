@@ -25,7 +25,7 @@ The DB driver is `@libsql/client` (libSQL/Turso), not better-sqlite3. The API is
 | TypeScript enum arrays and types | `backend/src/db/schema/enums.ts` |
 | Migration statements (DDL) | `backend/src/config/migrate.ts` |
 
-Migration approach: plain `CREATE TABLE IF NOT EXISTS` statements, with two exceptions — `ensureSzenarioAgileKiColumn()` runs a guarded, idempotent `ALTER TABLE szenario ADD COLUMN agileKiSteps ...` for databases created before that column existed, checking `PRAGMA table_info(szenario)` first and swallowing a "duplicate column" error (concurrent cold-start guard). `ensureTicketFullyReadyColumn()` does the same for `ALTER TABLE ticket ADD COLUMN fullyReady ...`, checking `PRAGMA table_info(ticket)` first and swallowing a "duplicate column" error. Both are safe to run on every startup. These are the codebase's only two ALTER-on-an-existing-table migrations — `ensureSzenarioAgileKiColumn()` (adds `agileKiSteps` to `szenario`) and `ensureTicketFullyReadyColumn()` (adds `fullyReady` to `ticket`); every other table still relies on `CREATE TABLE IF NOT EXISTS` only. All migrations run on every startup before CRM seed data is loaded. After DDL, `seedAgentTasks()` (`backend/src/seed/agentTaskSeed.ts`) inserts the 23 `agent_task` rows idempotently (INSERT OR IGNORE, fixed ids 1–23) — so agent tasks exist in every deployment including Vercel cold-starts.
+Migration approach: plain `CREATE TABLE IF NOT EXISTS` statements, with three exceptions — `ensureSzenarioAgileKiColumn()` runs a guarded, idempotent `ALTER TABLE szenario ADD COLUMN agileKiSteps ...` for databases created before that column existed, checking `PRAGMA table_info(szenario)` first and swallowing a "duplicate column" error (concurrent cold-start guard). `ensureTicketFullyReadyColumn()` does the same for `ALTER TABLE ticket ADD COLUMN fullyReady ...`, checking `PRAGMA table_info(ticket)` first and swallowing a "duplicate column" error. `ensureTicketAgentTaskIdColumn()` does the same for `ALTER TABLE ticket ADD COLUMN agentTaskId ...`, and additionally (re-)creates the `idx_ticket_agentTaskId` index unconditionally on every call, ensuring the index exists on both fresh and upgraded databases. All three are safe to run on every startup. These are the codebase's only three ALTER-on-an-existing-table migrations — `ensureSzenarioAgileKiColumn()` (adds `agileKiSteps` to `szenario`), `ensureTicketFullyReadyColumn()` (adds `fullyReady` to `ticket`), and `ensureTicketAgentTaskIdColumn()` (adds `agentTaskId` to `ticket`); every other table still relies on `CREATE TABLE IF NOT EXISTS` only. All migrations run on every startup before CRM seed data is loaded. After DDL, `seedAgentTasks()` (`backend/src/seed/agentTaskSeed.ts`) inserts the 23 `agent_task` rows idempotently (INSERT OR IGNORE, fixed ids 1–23) — so agent tasks exist in every deployment including Vercel cold-starts. `seedAgentTasks()` also runs a guarded, idempotent `UPDATE` on every startup that corrects the id=23 row's title from its original English seed value to the current (German) title in `AGENT_TASK_SEED` — it only fires while the title still matches the old value, so an already-seeded database picks up the correction exactly once and a human's later edit to that title is never overwritten.
 
 ## Tables
 
@@ -49,8 +49,9 @@ Kanban work items with an owner and status lifecycle. Created by admins or seede
 | resolvedAt | text | nullable — ISO-8601, set when status → `DONE` |
 | createdAt | text | NOT NULL, default `datetime('now')` |
 | updatedAt | text | NOT NULL, default `datetime('now')` |
+| agentTaskId | integer | nullable, FK → agent_task(id) ON DELETE SET NULL |
 
-No FKs. Indexes: `idx_ticket_status_owner_createdAt (status, owner, createdAt)`, `idx_ticket_type_status (type, status)`.
+FK: agent_task(id) ON DELETE SET NULL. Indexes: `idx_ticket_status_owner_createdAt (status, owner, createdAt)`, `idx_ticket_type_status (type, status)`, `idx_ticket_agentTaskId (agentTaskId)`.
 
 ### TicketComment (`ticket_comment`)
 
@@ -98,7 +99,7 @@ Server-side session store. Written and read by `backend/src/middleware/libsqlSes
 
 ### AgentTask (`agent_task`)
 
-Autonomous task queue. Tasks arrive from four external sources and move through a defined lifecycle: `OPEN → IN_PROGRESS → DONE | REJECTED`. Seeded idempotently on every startup via `INSERT OR IGNORE` with fixed ids 1–23 (`backend/src/seed/agentTaskSeed.ts`).
+Autonomous task queue. Tasks arrive from four external sources and move through a defined lifecycle: `OPEN → IN_PROGRESS → DONE | REJECTED`. Seeded idempotently on every startup via `INSERT OR IGNORE` with fixed ids 1–23 (`backend/src/seed/agentTaskSeed.ts`). The seed also runs a one-time corrective `UPDATE` of row id=23's `title` on every startup (fixing the original English seed title to its corrected German value) — guarded so it only fires while the title still carries the old literal, mirroring the analogous `UPDATE` pattern used by `szenario` below.
 
 | Column | SQLite Type | Constraints |
 |--------|-------------|-------------|
@@ -280,5 +281,6 @@ All indexes are created in `backend/src/config/migrate.ts` via `CREATE INDEX IF 
 | idx_cron_run_job_startedAt | cron_run | job, startedAt DESC |
 | idx_ticket_status_owner_createdAt | ticket | status, owner, createdAt |
 | idx_ticket_type_status | ticket | type, status |
+| idx_ticket_agentTaskId | ticket | agentTaskId |
 | idx_ticket_comment_ticketId | ticket_comment | ticketId |
 | idx_szenario_createdAt | szenario | createdAt DESC |

@@ -31,12 +31,14 @@ status:  OPEN ──(GET /next OR POST /:id/start)──▶ IN_PROGRESS ──(P
   "pickedUpAt": "2026-06-16T05:20:00.000Z",
   "resolvedAt": null,
   "createdAt": "2026-06-07T03:15:00.000Z",
-  "updatedAt": "2026-06-16T05:20:00.000Z"
+  "updatedAt": "2026-06-16T05:20:00.000Z",
+  "ticketId": 5
 }
 ```
 
 - `metadata` is a JSON **string** (source-specific fields), or `null`.
 - `comment`, `pickedUpAt`, `resolvedAt` are `null` until set.
+- `ticketId` is **derived**, never stored on the task. It's resolved by looking up which ticket points at this task via that ticket's `agentTaskId` (see `docs/specs/SPEC-API-TICKETS.md`). `null` when no ticket points at the task. If more than one ticket ever points at the same task, the **newest one wins** — highest `createdAt`, tie-broken by highest id.
 - All timestamps are ISO-8601 strings.
 
 ---
@@ -175,6 +177,8 @@ Sets every task back to `OPEN` and clears `comment`, `pickedUpAt`, `resolvedAt`.
 ```
 
 Counts above are the fresh-seed state: all 23 seeded tasks start `OPEN`.
+
+This endpoint returns counts only — it does **not** carry `ticketId`.
 
 | Result | Meaning |
 |--------|---------|

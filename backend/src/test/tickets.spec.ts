@@ -22,6 +22,14 @@
  *     atomicity with handBackToAi, untouched by all 7 non-write endpoints.
  *     Migration tests for the underlying column live in
  *     ticketFullyReadyMigration.spec.ts, not here.
+ *   agentTaskId (create) — TICKET-UI-LINK-FIXES: optional nullable link to
+ *     the app-feedback item (agent_task) a ticket was filed from. Create
+ *     default/explicit-null/valid-id/unknown-id(400)/non-integer(400), round
+ *     -trip typing across GET /:id, the paginated list, /board, and /next,
+ *     and untouched by all 8 write endpoints (REQ-207), including
+ *     POST /:id/comments. Migration tests for the underlying column live in
+ *     ticketAgentTaskIdMigration.spec.ts, not here. Reverse-direction tests
+ *     (agent-task.ticketId, "newest ticket wins") live in agentTasks.spec.ts.
  *
  * Authorization matrix:
  *   - Agent-token-or-admin endpoints (/:id/start, /:id/done, /:id/ask, create,
@@ -77,6 +85,10 @@ interface Ticket {
   status: string;
   solution: string | null;
   fullyReady: boolean;
+  // Nullable link back to the app-feedback item (agent_task) this ticket was
+  // filed from — set only at create time (REQ-207). See the agentTaskId
+  // suites near the end of this file.
+  agentTaskId: number | null;
   pickedUpAt: string | null;
   resolvedAt: string | null;
   createdAt: string;
@@ -92,6 +104,7 @@ interface TicketListItem {
   status: string;
   solution: string | null;
   fullyReady: boolean;
+  agentTaskId: number | null;
   commentCount: number;
 }
 
@@ -2886,5 +2899,327 @@ test.describe('fullyReady untouched by non-write endpoints', () => {
 
     await test.step('fullyReady unchanged (still true)', () => { expect(body.fullyReady).toBe(true); });
     await test.step('fullyReady is boolean-typed', () => { expect(typeof body.fullyReady).toBe('boolean'); });
+  });
+});
+
+// ─── Suite: POST /api/tickets — agentTaskId (link to app feedback) ──────────
+//
+// Isolation approach: like every other describe block in this file, each
+// test below runs against a freshly reset ticket table (resetTickets(admin)
+// = POST /api/tickets/reset) so link tests never depend on state left by an
+// earlier test. agent_task ids 1-23 are the fixed seed set (see
+// agentTaskSeed.ts) and are never deleted by resetTickets() (which only
+// touches ticket/ticket_comment), so referencing a fixed id below is stable
+// across this whole file's run. This file (tickets.spec.ts) is the LAST spec
+// file Playwright runs alphabetically (playwright.config.ts:
+// fullyParallel:false, workers:1), so nothing downstream depends on the
+// ticket table's state once this file finishes — but the last of the three
+// agentTaskId describe blocks below still resets the ticket table to exactly
+// its seeded 12 rows in its own afterAll (see "agentTaskId untouched by
+// write endpoints" below), both for defensiveness and to leave the DB in the
+// same shape a developer would find after `./start.sh --reset-db`.
+
+test.describe('POST /api/tickets — agentTaskId (link to app feedback)', () => {
+  let admin: APIRequestContext;
+
+  test.beforeEach(async () => {
+    admin = await loginCtx('admin', 'admin123');
+    await resetTickets(admin);
+  });
+
+  test.afterEach(async () => {
+    await admin.dispose();
+  });
+
+  test('create without agentTaskId → 201, field is null', async () => {
+    const resp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'No link', body: 'No source feedback.' },
+    });
+    expect(resp.status()).toBe(201);
+    const body = await resp.json() as Ticket;
+    expect(body.agentTaskId).toBeNull();
+  });
+
+  test('create with agentTaskId: null explicitly → 201, field is null (same as omitted)', async () => {
+    const resp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'Explicit null link', body: 'No source feedback.', agentTaskId: null },
+    });
+    expect(resp.status()).toBe(201);
+    const body = await resp.json() as Ticket;
+    expect(body.agentTaskId).toBeNull();
+  });
+
+  test('create with a valid existing agentTaskId → 201, field set, ticket still lands DEFINITION+HUMAN', async () => {
+    const resp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'Linked ticket', body: 'From feedback #1.', agentTaskId: 1 },
+    });
+    expect(resp.status()).toBe(201);
+    const body = await resp.json() as Ticket;
+
+    await test.step('agentTaskId is set to the referenced id', () => { expect(body.agentTaskId).toBe(1); });
+    await test.step('status defaults to DEFINITION (unaffected by the new field)', () => {
+      expect(body.status).toBe('DEFINITION');
+    });
+    await test.step('owner defaults to HUMAN (unaffected by the new field)', () => {
+      expect(body.owner).toBe('HUMAN');
+    });
+  });
+
+  test('create with an unknown agentTaskId → 400 with fieldErrors.agentTaskId, no ticket created', async () => {
+    const beforeResp = await admin.get('/api/tickets?size=1');
+    expect(beforeResp.status()).toBe(200);
+    const before = await beforeResp.json() as PageResult<TicketListItem>;
+
+    const resp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'Bad link', body: 'Points at nothing.', agentTaskId: 99999 },
+    });
+
+    await test.step('status 400', () => { expect(resp.status()).toBe(400); });
+    const body = await resp.json() as ErrorBody;
+    await test.step('fieldErrors.agentTaskId present', () => {
+      expect(typeof body.fieldErrors?.['agentTaskId']).toBe('string');
+    });
+
+    const afterResp = await admin.get('/api/tickets?size=1');
+    expect(afterResp.status()).toBe(200);
+    const after = await afterResp.json() as PageResult<TicketListItem>;
+    await test.step('ticket row count unchanged (no orphan insert)', () => {
+      expect(after.totalElements).toBe(before.totalElements);
+    });
+  });
+
+  test('create with a non-integer agentTaskId (string) → 400', async () => {
+    const resp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'Bad type (string)', body: 'String id.', agentTaskId: 'abc' },
+    });
+    expect(resp.status()).toBe(400);
+    const body = await resp.json() as ErrorBody;
+    expect(typeof body.fieldErrors?.['agentTaskId']).toBe('string');
+  });
+
+  test('create with a non-integer agentTaskId (float) → 400', async () => {
+    const resp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'Bad type (float)', body: 'Float id.', agentTaskId: 1.5 },
+    });
+    expect(resp.status()).toBe(400);
+    const body = await resp.json() as ErrorBody;
+    expect(typeof body.fieldErrors?.['agentTaskId']).toBe('string');
+  });
+});
+
+// ─── Suite: agentTaskId round-trip — read endpoints ──────────────────────────
+//
+// Isolation approach: same as the create suite above — resetTickets(admin)
+// in beforeAll gives this block a clean, known ticket table before it
+// creates its own single linked fixture, which every test in this
+// `beforeAll`-scoped (not `beforeEach`) block then reads back through a
+// different endpoint. Mirrors the "fullyReady round-trip" suite's structure
+// above (shared fixture, no reset between its own tests).
+
+test.describe('agentTaskId round-trip — read endpoints', () => {
+  let admin: APIRequestContext;
+  let agent: APIRequestContext;
+  let linkedTicketId: number;
+
+  test.beforeAll(async () => {
+    admin = await loginCtx('admin', 'admin123');
+    await resetTickets(admin);
+    agent = await agentCtx();
+
+    const createResp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title: 'Round-trip link fixture', body: 'From feedback #2.', agentTaskId: 2 },
+    });
+    expect(createResp.status()).toBe(201);
+    const created = await createResp.json() as Ticket;
+    linkedTicketId = created.id;
+  });
+
+  test.afterAll(async () => {
+    await admin.dispose();
+    await agent.dispose();
+  });
+
+  test('GET /:id: agentTaskId is set for the linked fixture, null for a seeded ticket', async () => {
+    const linkedResp = await admin.get(`/api/tickets/${linkedTicketId}`);
+    expect(linkedResp.status()).toBe(200);
+    const linked = await linkedResp.json() as Ticket;
+    await test.step('linked ticket carries agentTaskId', () => { expect(linked.agentTaskId).toBe(2); });
+
+    const seededResp = await admin.get('/api/tickets/1');
+    expect(seededResp.status()).toBe(200);
+    const seeded = await seededResp.json() as Ticket;
+    await test.step('seeded ticket agentTaskId is null', () => { expect(seeded.agentTaskId).toBeNull(); });
+  });
+
+  test('GET / (paginated list): agentTaskId present on every item, both a value and null occur', async () => {
+    const resp = await admin.get('/api/tickets?size=100');
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as PageResult<TicketListItem>;
+
+    const linkedItem = body.content.find((item) => item.id === linkedTicketId);
+    await test.step('linked ticket item carries agentTaskId', () => {
+      expect(linkedItem?.agentTaskId).toBe(2);
+    });
+    await test.step('at least one item has agentTaskId null (seeded tickets)', () => {
+      expect(body.content.some((item) => item.agentTaskId === null)).toBe(true);
+    });
+  });
+
+  test('GET /board: agentTaskId is present on the fixture in the DEFINITION column', async () => {
+    const resp = await admin.get('/api/tickets/board');
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as TicketBoard;
+
+    const item = body.DEFINITION.find((t) => t.id === linkedTicketId);
+    expect(item?.agentTaskId).toBe(2);
+  });
+
+  test('GET /next: agentTaskId survives claim TODO+AI → IN_PROGRESS', async () => {
+    // Promote the fixture to TODO+AI so /next can claim it.
+    const statusResp = await admin.patch(`/api/tickets/${linkedTicketId}/status`, { data: { status: 'TODO' } });
+    expect(statusResp.status()).toBe(200);
+    const ownerResp = await admin.patch(`/api/tickets/${linkedTicketId}/owner`, { data: { owner: 'AI' } });
+    expect(ownerResp.status()).toBe(200);
+
+    // Drain until this specific ticket is claimed — other TODO+AI seeded
+    // tickets (createdAt earlier) may be claimed first.
+    let claimed: Ticket | undefined;
+    for (let i = 0; i < 10 && !claimed; i++) {
+      const nextResp = await agent.get('/api/tickets/next');
+      if (nextResp.status() === 204) break;
+      const candidate = await nextResp.json() as Ticket;
+      if (candidate.id === linkedTicketId) claimed = candidate;
+    }
+
+    await test.step('the linked fixture was claimable via /next', () => { expect(claimed).toBeDefined(); });
+    await test.step('claimed ticket agentTaskId is unchanged', () => { expect(claimed?.agentTaskId).toBe(2); });
+  });
+});
+
+// ─── Suite: agentTaskId untouched by write endpoints (REQ-207) ──────────────
+//
+// Covers /start, /done, /ask, /wont-do, /hand-to-ai, PATCH /status,
+// PATCH /owner, and POST /:id/comments — REQ-207 says create is the only
+// write path for agentTaskId; every other route must leave it alone. Mirrors
+// the "fullyReady untouched by non-write endpoints" suite above; unlike that
+// suite, POST /:id/comments is included here too — agentTaskId has no
+// clearFullyReady-style toggle, so nothing exempts /comments from this check.
+// /wont-do and /hand-to-ai are asserted explicitly below like every other
+// endpoint; they are not treated as special cases.
+
+test.describe('agentTaskId untouched by write endpoints (REQ-207)', () => {
+  let admin: APIRequestContext;
+  let agent: APIRequestContext;
+
+  test.beforeAll(async () => {
+    admin = await loginCtx('admin', 'admin123');
+    agent = await agentCtx();
+  });
+
+  test.afterAll(async () => {
+    // Final cleanup for this file: restore the ticket table to exactly its
+    // seeded 12 rows. tickets.spec.ts is the last spec file Playwright runs
+    // alphabetically (see the header comment above the first agentTaskId
+    // suite in this file), so nothing downstream reads this state — this
+    // call is defensive, matching the same discipline every other describe
+    // block in this file already follows via resetTickets() in its own
+    // beforeAll/beforeEach.
+    await resetTickets(admin);
+    await admin.dispose();
+    await agent.dispose();
+  });
+
+  async function createLinkedTicket(title: string): Promise<Ticket> {
+    const resp = await admin.post('/api/tickets', {
+      data: { type: 'FEATURE', title, body: 'Linked ticket for untouched-by check.', agentTaskId: 3 },
+    });
+    expect(resp.status()).toBe(201);
+    const ticket = await resp.json() as Ticket;
+    expect(ticket.agentTaskId).toBe(3);
+    return ticket;
+  }
+
+  test('POST /:id/start leaves agentTaskId unchanged', async () => {
+    const created = await createLinkedTicket('start untouched (agentTaskId)');
+    await admin.patch(`/api/tickets/${created.id}/status`, { data: { status: 'TODO' } });
+    await admin.patch(`/api/tickets/${created.id}/owner`, { data: { owner: 'AI' } });
+
+    const resp = await agent.post(`/api/tickets/${created.id}/start`, { data: {} });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+    expect(body.agentTaskId).toBe(3);
+  });
+
+  test('POST /:id/done leaves agentTaskId unchanged', async () => {
+    const created = await createLinkedTicket('done untouched (agentTaskId)');
+    await admin.patch(`/api/tickets/${created.id}/status`, { data: { status: 'TODO' } });
+    await admin.patch(`/api/tickets/${created.id}/owner`, { data: { owner: 'AI' } });
+    const startResp = await agent.post(`/api/tickets/${created.id}/start`, { data: {} });
+    expect(startResp.status()).toBe(200);
+
+    const resp = await agent.post(`/api/tickets/${created.id}/done`, { data: {} });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+    expect(body.agentTaskId).toBe(3);
+  });
+
+  test('POST /:id/ask leaves agentTaskId unchanged', async () => {
+    const created = await createLinkedTicket('ask untouched (agentTaskId)');
+    await admin.patch(`/api/tickets/${created.id}/status`, { data: { status: 'TODO' } });
+    await admin.patch(`/api/tickets/${created.id}/owner`, { data: { owner: 'AI' } });
+    const startResp = await agent.post(`/api/tickets/${created.id}/start`, { data: {} });
+    expect(startResp.status()).toBe(200);
+
+    const resp = await agent.post(`/api/tickets/${created.id}/ask`, { data: { question: 'Untouched?' } });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+    expect(body.agentTaskId).toBe(3);
+  });
+
+  test('POST /:id/wont-do (admin-session-only) leaves agentTaskId unchanged', async () => {
+    const created = await createLinkedTicket('wont-do untouched (agentTaskId)');
+    // owner=HUMAN, status=DEFINITION (!= DONE) already satisfies the guard.
+
+    const resp = await admin.post(`/api/tickets/${created.id}/wont-do`, { data: {} });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+    expect(body.agentTaskId).toBe(3);
+  });
+
+  test('POST /:id/hand-to-ai (admin-session-only) leaves agentTaskId unchanged', async () => {
+    const created = await createLinkedTicket('hand-to-ai untouched (agentTaskId)');
+    // status=DEFINITION already satisfies the guard.
+
+    const resp = await admin.post(`/api/tickets/${created.id}/hand-to-ai`);
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+    expect(body.agentTaskId).toBe(3);
+  });
+
+  test('PATCH /:id/status leaves agentTaskId unchanged', async () => {
+    const created = await createLinkedTicket('status untouched (agentTaskId)');
+
+    const resp = await admin.patch(`/api/tickets/${created.id}/status`, { data: { status: 'TODO' } });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+    expect(body.agentTaskId).toBe(3);
+  });
+
+  test('PATCH /:id/owner leaves agentTaskId unchanged', async () => {
+    const created = await createLinkedTicket('owner untouched (agentTaskId)');
+
+    const resp = await admin.patch(`/api/tickets/${created.id}/owner`, { data: { owner: 'AI' } });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+    expect(body.agentTaskId).toBe(3);
+  });
+
+  test('POST /:id/comments leaves agentTaskId unchanged', async () => {
+    const created = await createLinkedTicket('comments untouched (agentTaskId)');
+
+    const resp = await admin.post(`/api/tickets/${created.id}/comments`, { data: { body: 'Just a note.' } });
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as Ticket;
+    expect(body.agentTaskId).toBe(3);
   });
 });

@@ -36,7 +36,7 @@ configuration belongs in this file.
 | skill-coder | Create and update Claude Code skills and subagents | coding |
 | skill-reviewer | Review Claude Code skills and subagents | review |
 | data-reader | Read-only fact-finding: look something up in files or on the web and report findings | research |
-| data-writer | Save already-finished content to a file at a known path, verbatim | writing |
+| data-writer | Save already-finished content to a file at a known path, verbatim | persistence |
 
 Agent files: `.claude/agents/`
 

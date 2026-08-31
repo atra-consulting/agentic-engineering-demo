@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ComponentFixture } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { By } from '@angular/platform-browser';
+import { provideRouter, RouterLink } from '@angular/router';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { AgentTaskDetailComponent } from './agent-task-detail.component';
@@ -15,6 +16,7 @@ const MOCK_TASK: AgentTask = {
   status: 'DONE',
   comment: 'Implemented pipeline total in Chancen board header.',
   metadata: '{"issueNumber":42,"repo":"crm"}',
+  ticketId: null,
   pickedUpAt: '2024-01-02T08:00:00.000Z',
   resolvedAt: '2024-01-02T12:00:00.000Z',
   createdAt: '2024-01-01T10:00:00.000Z',
@@ -133,6 +135,69 @@ describe('AgentTaskDetailComponent', () => {
     const alert: HTMLElement = fixture3.nativeElement.querySelector('.alert-danger');
     expect(alert).toBeTruthy();
     expect(alert.textContent).toContain('Aufgabe nicht gefunden');
+  });
+});
+
+// ─── Ticket cross-link ─────────────────────────────────────────────────────────
+
+describe('AgentTaskDetailComponent — ticket cross-link', () => {
+  // Scope link lookups to the info dl so the "Zurück" routerLink in the page
+  // header (also a RouterLink) cannot be mistaken for the cross-link.
+  const INFO_DL_SELECTOR = 'dl.row';
+
+  it('renders exactly one link to the ticket detail page when ticketId is set', async () => {
+    const linkedTask: AgentTask = { ...MOCK_TASK, ticketId: 99 };
+    const mockService = jasmine.createSpyObj<AgentTaskService>('AgentTaskService', ['getById']);
+    mockService.getById.and.returnValue(of(linkedTask));
+
+    await TestBed.configureTestingModule({
+      imports: [AgentTaskDetailComponent],
+      providers: [
+        provideRouter([]),
+        { provide: AgentTaskService, useValue: mockService },
+        { provide: ActivatedRoute, useValue: makeRoute('7') },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AgentTaskDetailComponent);
+    fixture.detectChanges();
+
+    const infoDl = fixture.debugElement.query(By.css(INFO_DL_SELECTOR));
+    expect(infoDl).toBeTruthy();
+
+    const linkDebugEls = infoDl.queryAll(By.directive(RouterLink));
+    expect(linkDebugEls.length).toBe(1);
+
+    const anchor = linkDebugEls[0].nativeElement as HTMLAnchorElement;
+    expect(anchor.getAttribute('href')).toBe('/admin/tickets/99');
+    expect(anchor.textContent).toContain('Ticket #99');
+  });
+
+  it('renders no ticket link when ticketId is null', async () => {
+    // MOCK_TASK.ticketId is null
+    const mockService = jasmine.createSpyObj<AgentTaskService>('AgentTaskService', ['getById']);
+    mockService.getById.and.returnValue(of(MOCK_TASK));
+
+    await TestBed.configureTestingModule({
+      imports: [AgentTaskDetailComponent],
+      providers: [
+        provideRouter([]),
+        { provide: AgentTaskService, useValue: mockService },
+        { provide: ActivatedRoute, useValue: makeRoute('7') },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AgentTaskDetailComponent);
+    fixture.detectChanges();
+
+    const infoDl = fixture.debugElement.query(By.css(INFO_DL_SELECTOR));
+    expect(infoDl).toBeTruthy();
+
+    const linkDebugEls = infoDl.queryAll(By.directive(RouterLink));
+    expect(linkDebugEls.length).toBe(0);
+
+    // No stray dt/dd — the label text is absent from the page entirely.
+    expect(fixture.nativeElement.textContent).not.toContain('Ticket #');
   });
 });
 

@@ -21,6 +21,7 @@ function makeTicket(id: number, overrides: Partial<Ticket> = {}): Ticket {
     body: `Body of ticket ${id}`,
     status: 'TODO',
     solution: null,
+    agentTaskId: null,
     commentCount: 0,
     comments: [],
     pickedUpAt: null,
@@ -221,6 +222,109 @@ describe('TicketBoardComponent — template rendering', () => {
   it('does not render loading spinner after board loads', () => {
     const spinner = fixture.nativeElement.querySelector('app-loading-spinner');
     expect(spinner).toBeNull();
+  });
+});
+
+// ─── Ticket number on card ─────────────────────────────────────────────────────
+
+describe('TicketBoardComponent — ticket number on card', () => {
+  let fixture: ComponentFixture<TicketBoardComponent>;
+
+  beforeEach(async () => {
+    const mockService = makeMockTicketService();
+    mockService.getBoard.and.returnValue(of(makeMockBoard()));
+    mockService.getSummary.and.returnValue(of(MOCK_SUMMARY));
+    await setupTestBed(mockService);
+
+    fixture = TestBed.createComponent(TicketBoardComponent);
+    fixture.detectChanges();
+  });
+
+  it('renders "#0" as the ticket number in the Definition column', () => {
+    const numberEl: HTMLElement = fixture.nativeElement.querySelector('#list-DEFINITION .ticket-number');
+    expect(numberEl).toBeTruthy();
+    expect(numberEl.textContent?.trim()).toBe('#0');
+  });
+
+  it('renders "#1" as the ticket number for the first card in the Bereit (TODO) column', () => {
+    const numberEl: HTMLElement = fixture.nativeElement.querySelector('#list-TODO .ticket-number');
+    expect(numberEl).toBeTruthy();
+    expect(numberEl.textContent?.trim()).toBe('#1');
+  });
+
+  it('renders "#3" as the ticket number in the In Arbeit (IN_PROGRESS) column', () => {
+    const numberEl: HTMLElement = fixture.nativeElement.querySelector('#list-IN_PROGRESS .ticket-number');
+    expect(numberEl).toBeTruthy();
+    expect(numberEl.textContent?.trim()).toBe('#3');
+  });
+
+  it('renders "#4" as the ticket number in the Wartet (ON_HOLD) column', () => {
+    const numberEl: HTMLElement = fixture.nativeElement.querySelector('#list-ON_HOLD .ticket-number');
+    expect(numberEl).toBeTruthy();
+    expect(numberEl.textContent?.trim()).toBe('#4');
+  });
+
+  it('renders "#5" as the ticket number in the Erledigt (DONE) column', () => {
+    const numberEl: HTMLElement = fixture.nativeElement.querySelector('#list-DONE .ticket-number');
+    expect(numberEl).toBeTruthy();
+    expect(numberEl.textContent?.trim()).toBe('#5');
+  });
+
+  it('renders the ticket number as a descendant of .ticket-body-click, not a direct child of .ticket-card', () => {
+    const numberEl: HTMLElement = fixture.nativeElement.querySelector('#list-DEFINITION .ticket-number');
+    // Must be nested inside the clickable region...
+    expect(numberEl.closest('.ticket-body-click')).toBeTruthy();
+
+    // ...not a sibling of .ticket-body-click directly under .ticket-card.
+    const card: HTMLElement | null = numberEl.closest('.ticket-card');
+    expect(card).toBeTruthy();
+    expect(Array.from(card!.children)).not.toContain(numberEl);
+  });
+
+  it('the .ticket-number element carries no tabindex and is neither a <button> nor an <a>', () => {
+    const numberEls: NodeListOf<HTMLElement> = fixture.nativeElement.querySelectorAll('.ticket-number');
+    // Mock board has 6 tickets total (ids 0–5) across the 5 columns.
+    expect(numberEls.length).toBe(6);
+    numberEls.forEach((el) => {
+      expect(el.hasAttribute('tabindex')).toBeFalse();
+      expect(el.tagName.toLowerCase()).not.toBe('button');
+      expect(el.tagName.toLowerCase()).not.toBe('a');
+    });
+  });
+});
+
+// ─── Card content sanity check (title, badges, comment count) ────────────────
+// Quick check that adding the ticket number did not disturb existing card
+// content — the existing suite already covers title/badges/comments in detail.
+
+describe('TicketBoardComponent — card content still renders alongside the ticket number', () => {
+  let fixture: ComponentFixture<TicketBoardComponent>;
+
+  beforeEach(async () => {
+    const boardWithComments: TicketBoard = {
+      DEFINITION: [],
+      TODO: [makeTicket(20, { type: 'BUG', owner: 'HUMAN', commentCount: 3 })],
+      IN_PROGRESS: [],
+      ON_HOLD: [],
+      DONE: [],
+    };
+
+    const mockService = makeMockTicketService();
+    mockService.getBoard.and.returnValue(of(boardWithComments));
+    mockService.getSummary.and.returnValue(of(MOCK_SUMMARY));
+    await setupTestBed(mockService);
+
+    fixture = TestBed.createComponent(TicketBoardComponent);
+    fixture.detectChanges();
+  });
+
+  it('still renders title, type badge, owner badge, and comment count on the card', () => {
+    const card: HTMLElement = fixture.nativeElement.querySelector('#list-TODO .ticket-card');
+    expect(card).toBeTruthy();
+    expect(card.querySelector('.ticket-title')?.textContent).toContain('Ticket 20');
+    expect(card.querySelector('.type-bug')?.textContent).toContain('Bug');
+    expect(card.querySelector('.owner-human')?.textContent).toContain('Mensch');
+    expect(card.querySelector('.ticket-comment-count')?.textContent).toContain('3');
   });
 });
 
