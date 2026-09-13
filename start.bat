@@ -130,7 +130,7 @@ set "BACKEND_TRY=0"
 
 :backend_wait_loop
 set /a BACKEND_TRY+=1
-curl -s -o nul -w "%{http_code}" "http://localhost:%BACKEND_PORT%/api/health" 2>nul | findstr "200" >nul 2>&1
+curl -s -o nul -w "%%{http_code}" "http://localhost:%BACKEND_PORT%/api/health" 2>nul | findstr "200" >nul 2>&1
 if not errorlevel 1 (
     echo Backend is ready!
     set "BACKEND_READY=true"
