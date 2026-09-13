@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
@@ -7,6 +8,8 @@ import { CdkDragDrop } from '@angular/cdk/drag-drop';
 import { TicketBoardComponent } from './ticket-board.component';
 import { TicketService } from '../../../core/services/ticket.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { BenutzerInfo } from '../../../core/models/auth.model';
 import { Ticket, TicketBoard, TicketSummary } from '../../../core/models/ticket.model';
 
 // ─── Test-data factories ──────────────────────────────────────────────────────
@@ -85,9 +88,42 @@ function makeModalStub(resolveResult: unknown = undefined): Partial<NgbModal> {
   };
 }
 
+// ─── Role fixtures ─────────────────────────────────────────────────────────────
+
+const adminUser: BenutzerInfo = {
+  id: 1,
+  benutzername: 'admin',
+  vorname: 'Admin',
+  nachname: 'User',
+  email: 'admin@test.de',
+  rollen: ['ROLE_ADMIN', 'ROLE_USER'],
+  permissions: [],
+};
+
+const regularUser: BenutzerInfo = {
+  id: 2,
+  benutzername: 'user',
+  vorname: 'Regular',
+  nachname: 'User',
+  email: 'user@test.de',
+  rollen: ['ROLE_USER'],
+  permissions: [],
+};
+
+function makeMockAuthService(
+  user: BenutzerInfo | null = adminUser,
+): { currentUser: ReturnType<typeof signal<BenutzerInfo | null>> } {
+  return { currentUser: signal(user) };
+}
+
+// Defaults to an ADMIN user so every pre-existing (pre-role-gate) spec keeps
+// seeing the full admin UI without having to opt in explicitly. Specs that
+// exercise the non-admin view pass an explicit `authService` mock built with
+// `makeMockAuthService(regularUser)`.
 async function setupTestBed(
   mockService: jasmine.SpyObj<TicketService>,
   notif?: jasmine.SpyObj<NotificationService>,
+  authService?: { currentUser: ReturnType<typeof signal<BenutzerInfo | null>> },
 ): Promise<void> {
   await TestBed.configureTestingModule({
     imports: [TicketBoardComponent],
@@ -96,6 +132,7 @@ async function setupTestBed(
       { provide: TicketService, useValue: mockService },
       { provide: NotificationService, useValue: notif ?? makeMockNotification() },
       { provide: NgbModal, useValue: makeModalStub() },
+      { provide: AuthService, useValue: authService ?? makeMockAuthService(adminUser) },
     ],
   }).compileComponents();
 }
@@ -561,6 +598,7 @@ describe('TicketBoardComponent — onDrop() error rollback', () => {
         { provide: TicketService, useValue: mockService },
         { provide: NotificationService, useValue: mockNotification },
         { provide: NgbModal, useValue: makeModalStub() },
+        { provide: AuthService, useValue: makeMockAuthService(adminUser) },
       ],
     }).compileComponents();
   });
@@ -1117,5 +1155,130 @@ describe('TicketBoardComponent — recentOnly sessionStorage persistence', () =>
     expect(() => component.toggleRecent()).not.toThrow();
     // The in-memory toggle still happens even though persistence failed silently.
     expect(component.recentOnly).toBeTrue();
+  });
+});
+
+// ─── Role-based visibility (isAdmin) — R5.14 / R5.17 ─────────────────────────
+// Admins see the "Neues Ticket" button and the drag handles; non-admins see
+// neither, but the board itself (columns, KPI tiles, badges, comment counts)
+// stays fully visible and readable for everyone.
+
+describe('TicketBoardComponent — role-based visibility (isAdmin)', () => {
+  // One test below calls toggleRecent(), which persists to sessionStorage —
+  // start clean and clean up after so it can't leak into a sibling spec.
+  beforeEach(() => {
+    sessionStorage.removeItem('ticketBoard.recentOnly');
+  });
+
+  afterEach(() => {
+    sessionStorage.removeItem('ticketBoard.recentOnly');
+  });
+
+  async function createBoard(
+    authService: { currentUser: ReturnType<typeof signal<BenutzerInfo | null>> },
+  ): Promise<ComponentFixture<TicketBoardComponent>> {
+    const mockService = makeMockTicketService();
+    mockService.getBoard.and.returnValue(of(makeMockBoard()));
+    mockService.getSummary.and.returnValue(of(MOCK_SUMMARY));
+    await setupTestBed(mockService, undefined, authService);
+
+    const fixture = TestBed.createComponent(TicketBoardComponent);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('shows the "Neues Ticket" button and the drag handles for an admin user', async () => {
+    const fixture = await createBoard(makeMockAuthService(adminUser));
+
+    const createButton: HTMLElement | null = fixture.nativeElement.querySelector(
+      '.page-header button.btn-primary',
+    );
+    expect(createButton).toBeTruthy();
+    expect(createButton!.textContent).toContain('Neues Ticket');
+
+    const dragHandles = fixture.nativeElement.querySelectorAll('.ticket-drag-handle');
+    expect(dragHandles.length).toBeGreaterThan(0);
+  });
+
+  it('hides the "Neues Ticket" button and the drag handles for a non-admin user', async () => {
+    const fixture = await createBoard(makeMockAuthService(regularUser));
+
+    const createButton: HTMLElement | null = fixture.nativeElement.querySelector(
+      '.page-header button.btn-primary',
+    );
+    expect(createButton).toBeNull();
+
+    const dragHandles = fixture.nativeElement.querySelectorAll('.ticket-drag-handle');
+    expect(dragHandles.length).toBe(0);
+  });
+
+  it('keeps a non-admin card drag-disabled even when recentOnly is false (the OR condition)', async () => {
+    const fixture = await createBoard(makeMockAuthService(regularUser));
+    const component = fixture.componentInstance;
+    expect(component.recentOnly).toBeFalse();
+
+    const card: HTMLElement | null = fixture.nativeElement.querySelector(
+      '#list-TODO .ticket-card',
+    );
+    expect(card).toBeTruthy();
+    expect(card!.classList.contains('cdk-drag-disabled')).toBeTrue();
+  });
+
+  it('keeps an admin card drag-disabled when recentOnly is true (the other half of the OR)', async () => {
+    // A ticket dated "now" so it survives the recentOnly filter and stays
+    // visible in the TODO column while filtering is active.
+    const now = new Date().toISOString();
+    const recentBoard: TicketBoard = {
+      DEFINITION: [],
+      TODO: [makeTicket(1, { updatedAt: now, createdAt: now })],
+      IN_PROGRESS: [],
+      ON_HOLD: [],
+      DONE: [],
+    };
+
+    const mockService = makeMockTicketService();
+    mockService.getBoard.and.returnValue(of(recentBoard));
+    mockService.getSummary.and.returnValue(of(MOCK_SUMMARY));
+    await setupTestBed(mockService, undefined, makeMockAuthService(adminUser));
+
+    const fixture = TestBed.createComponent(TicketBoardComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    component.toggleRecent();
+    fixture.detectChanges();
+    expect(component.recentOnly).toBeTrue();
+
+    const card: HTMLElement | null = fixture.nativeElement.querySelector(
+      '#list-TODO .ticket-card',
+    );
+    expect(card).toBeTruthy();
+    expect(card!.classList.contains('cdk-drag-disabled')).toBeTrue();
+  });
+
+  it('still renders all five columns, KPI tiles, badges, and comment counts for a non-admin user', async () => {
+    const boardWithComments: TicketBoard = {
+      DEFINITION: [makeTicket(0, { status: 'DEFINITION' })],
+      TODO: [makeTicket(1, { type: 'BUG', commentCount: 2 })],
+      IN_PROGRESS: [makeTicket(3, { status: 'IN_PROGRESS' })],
+      ON_HOLD: [makeTicket(4, { status: 'ON_HOLD', owner: 'HUMAN' })],
+      DONE: [makeTicket(5, { status: 'DONE', solution: 'DONE' })],
+    };
+
+    const mockService = makeMockTicketService();
+    mockService.getBoard.and.returnValue(of(boardWithComments));
+    mockService.getSummary.and.returnValue(of(MOCK_SUMMARY));
+    await setupTestBed(mockService, undefined, makeMockAuthService(regularUser));
+
+    const fixture = TestBed.createComponent(TicketBoardComponent);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelectorAll('.board-column').length).toBe(5);
+    expect(fixture.nativeElement.querySelectorAll('.kpi-tile').length).toBeGreaterThan(0);
+    expect(fixture.nativeElement.querySelector('.type-bug')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.owner-human')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.ticket-comment-count')?.textContent).toContain(
+      '2',
+    );
   });
 });

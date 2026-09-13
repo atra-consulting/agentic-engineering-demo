@@ -111,6 +111,30 @@ describe('SidebarComponent', () => {
     expect((anchor.textContent as string)).toContain('Trainings-Feedback');
   });
 
+  it('shows "Tickets" for a USER-role user (no requiredRole gate on that item)', () => {
+    mockAuthService.currentUser.set(regularUser);
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Tickets');
+  });
+
+  it('does not show "App-Feedback" or "Cron-Jobs" for a USER-role user', () => {
+    mockAuthService.currentUser.set(regularUser);
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).not.toContain('App-Feedback');
+    expect(text).not.toContain('Cron-Jobs');
+  });
+
+  it('shows "Tickets", "App-Feedback", and "Cron-Jobs" for an ADMIN-role user', () => {
+    mockAuthService.currentUser.set(adminUser);
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Tickets');
+    expect(text).toContain('App-Feedback');
+    expect(text).toContain('Cron-Jobs');
+  });
+
   it('hides the Feedback label but keeps the link clickable when collapsed', () => {
     mockAuthService.currentUser.set(regularUser);
     mockLayoutService.collapsed.set(true);
