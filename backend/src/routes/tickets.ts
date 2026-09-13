@@ -84,7 +84,7 @@ router.get(
   }),
 );
 
-// ─── Admin literal-path endpoints (must come before /:id) ─────────────────────
+// ─── Literal-path endpoints (must come before /:id) ──────────────────────────────
 
 // GET /api/tickets/board
 // Read-only. Accepts agent token, loopback bypass, or any logged-in session —
