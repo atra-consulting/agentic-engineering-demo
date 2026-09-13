@@ -1,7 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { requireAgentToken, requireAgentTokenOrAdminSession } from '../middleware/agentAuth.js';
+import {
+  requireAgentToken,
+  requireAgentTokenOrAdminSession,
+  requireAgentTokenOrAuthenticatedSession,
+} from '../middleware/agentAuth.js';
 import { ticketService } from '../services/ticketService.js';
 import { parsePaginationParams, parseSort } from '../utils/pagination.js';
 import { validate } from '../utils/validation.js';
@@ -83,21 +87,22 @@ router.get(
 // ─── Admin literal-path endpoints (must come before /:id) ─────────────────────
 
 // GET /api/tickets/board
-// Accepts agent token, loopback bypass, or admin session — a skill can peek
-// the whole board without claiming anything and without an admin login.
+// Read-only. Accepts agent token, loopback bypass, or any logged-in session —
+// every user may read the board; only admins change it. A skill can still peek
+// the whole board without claiming anything and without a login.
 router.get(
   '/board',
-  requireAgentTokenOrAdminSession,
+  requireAgentTokenOrAuthenticatedSession,
   asyncHandler(async (_req: Request, res: Response) => {
     res.json(await ticketService.getBoard());
   }),
 );
 
 // GET /api/tickets/summary
+// Read-only — any logged-in user.
 router.get(
   '/summary',
   requireAuth,
-  requireRole('ADMIN'),
   asyncHandler(async (_req: Request, res: Response) => {
     res.json(await ticketService.getSummary());
   }),
@@ -115,10 +120,10 @@ router.post(
 );
 
 // GET /api/tickets
+// Read-only — any logged-in user.
 router.get(
   '/',
   requireAuth,
-  requireRole('ADMIN'),
   asyncHandler(async (req: Request, res: Response) => {
     const { page, size } = parsePaginationParams(req.query as Record<string, unknown>);
     const sort = parseSort(
@@ -169,9 +174,11 @@ router.post(
 // ─── Parameterised endpoints ──────────────────────────────────────────────────
 
 // GET /api/tickets/:id
+// Read-only. Accepts agent token, loopback bypass, or any logged-in session —
+// every user may read a ticket; only admins change it.
 router.get(
   '/:id',
-  requireAgentTokenOrAdminSession,
+  requireAgentTokenOrAuthenticatedSession,
   asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params['id'] as string, 10);
     res.json(await ticketService.findById(id));
