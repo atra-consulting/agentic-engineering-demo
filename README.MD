@@ -136,7 +136,7 @@ Die App hat drei Tools für Training und Demo. Starte die App, dann öffne die U
 |------|-----|--------|
 | **Produktivitäts-Rechner** | <http://localhost:7200/produktivitaet/rechner> | Jeder Login |
 | **Agent-Task-Dashboard** | <http://localhost:7200/admin/agent-tasks> | Nur Admin |
-| **Ticket-Board** | <http://localhost:7200/admin/tickets> | Nur Admin |
+| **Ticket-Board** | <http://localhost:7200/admin/tickets> | Ansehen: jeder Login. Ändern: nur Admin |
 
 Details zu jedem Tool: **[docs/TOOLS.md](docs/TOOLS.md)**
 

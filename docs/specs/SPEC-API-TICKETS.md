@@ -77,7 +77,7 @@ Same fields as ticket, but `comments` is replaced by `commentCount: number`.
 
 ## Authentication
 
-Three schemes. Most verb endpoints accept more than one — the finish/ask verbs (`/:id/start`, `/:id/done`, `/:id/ask`) plus the write endpoints a skill needs (`create`, `/:id/owner`, `/:id/comments`, `/:id/status`) plus `GET /:id` and `GET /board` accept **agent token · loopback bypass · admin session** (first match wins). `GET /next` is the exception: it's a GET that mutates state (claims a ticket), so it accepts **agent token · loopback bypass only** — never an admin session, to avoid a GET-based CSRF surface (a `SameSite=Lax` session cookie still rides cross-site top-level GET navigations).
+Three schemes: agent token, loopback bypass, and session. Most verb endpoints accept more than one — the finish/ask verbs (`/:id/start`, `/:id/done`, `/:id/ask`) plus the write endpoints a skill needs (`create`, `/:id/owner`, `/:id/comments`, `/:id/status`) accept **agent token · loopback bypass · admin session** (first match wins). `GET /:id` and `GET /board` accept the same agent token and loopback bypass, but their session leg is wider — **any authenticated session**, not just admin. `GET /next` is the exception: it's a GET that mutates state (claims a ticket), so it accepts **agent token · loopback bypass only** — never a session of any kind, to avoid a GET-based CSRF surface (a `SameSite=Lax` session cookie still rides cross-site top-level GET navigations).
 
 ### Agent token (used by `/next`, `/:id/start`, `/:id/done`, `/:id/ask`, `POST /`, `GET /:id`, `GET /board`, `PATCH /:id/owner`, `PATCH /:id/status`, `POST /:id/comments`)
 
@@ -90,7 +90,7 @@ X-Agent-Token: <AGENT_API_TOKEN>
 ```
 
 - Compared against `AGENT_API_TOKEN` env var via SHA-256 + constant-time `timingSafeEqual`.
-- If `AGENT_API_TOKEN` is **unset/empty**, these endpoints still work with a valid admin session — agent token and loopback bypass are both skipped when the token is unset, so the check falls through to the session check.
+- If `AGENT_API_TOKEN` is **unset/empty**, these endpoints still work with a valid session — agent token and loopback bypass are both skipped when the token is unset, so the check falls through to the session check. Admin-gated endpoints in this list still need an admin session; `GET /:id` and `GET /board` accept any logged-in session.
 - Missing or wrong token → **401**.
 - **Localhost bypass:** Set `AGENT_AUTH_ALLOW_LOOPBACK=1` in `backend/.env`. Requests from `127.0.0.1`, `::1`, or `::ffff:127.0.0.1` with no `Authorization` or `X-Agent-Token` header then skip validation. Requests with proxy-forwarding headers (`X-Forwarded-For`, `X-Real-IP`, `Forwarded`) are never bypassed. Local development only — never set in production.
 - Locally the backend auto-loads `backend/.env`; in CI set it as a GitHub Actions secret.
@@ -108,17 +108,21 @@ cp backend/.env.example backend/.env
 set -a && source backend/.env && set +a
 ```
 
-### Admin session
+### Session
 
-Standard browser session cookie + role `ADMIN` (`requireAuth` + `requireRole('ADMIN')`).
+Standard browser session cookie (`requireAuth`). Write endpoints also need role `ADMIN` (`requireRole('ADMIN')`); a few read-only endpoints accept any logged-in user.
 
-- No session → **401**. Authenticated but not admin → **403**.
+- No session → **401**. Logged in but missing the required role → **403** (admin-gated endpoints only).
 
-**Admin-only** (session required, no token or loopback accepted): `GET /`, `GET /summary`, `POST /:id/wont-do`, `POST /:id/hand-to-ai`, `POST /reset`.
+**Admin-only** (admin session required, no token or loopback accepted): `POST /:id/wont-do`, `POST /:id/hand-to-ai`, `POST /reset`.
 
-**Agent token _or_ loopback bypass only** (no admin session — GET mutates state, so an admin session would open a CSRF hole via cross-site GET navigation): `GET /next`.
+**Any authenticated session** (no token, loopback, or admin role needed): `GET /`, `GET /summary`.
 
-**Admin session _or_ agent token _or_ loopback bypass** (first match wins): `POST /:id/start`, `POST /:id/done`, `POST /:id/ask`, `GET /:id`, `GET /board`, `POST /` (create), `PATCH /:id/owner`, `PATCH /:id/status`, `POST /:id/comments`. A wrong token is rejected outright (never falls through to the session check). These let a headless skill work and finish a ticket — or file, refine, peek, and move one — without an admin login.
+**Agent token _or_ loopback bypass only** (no session of any kind — GET mutates state, so a session cookie would open a CSRF hole via cross-site GET navigation): `GET /next`.
+
+**Agent token _or_ loopback bypass _or_ any authenticated session** (first match wins): `GET /:id`, `GET /board`. Every logged-in user may read these; only admins change anything.
+
+**Admin session _or_ agent token _or_ loopback bypass** (first match wins): `POST /:id/start`, `POST /:id/done`, `POST /:id/ask`, `POST /` (create), `PATCH /:id/owner`, `PATCH /:id/status`, `POST /:id/comments`. A wrong token is rejected outright (never falls through to the session check). These let a headless skill work and finish a ticket — or file, refine, and move one — without an admin login.
 
 The admin board UI is at **`/admin/tickets`**.
 
@@ -191,8 +195,8 @@ curl -s -X POST -H "Authorization: Bearer $AGENT_API_TOKEN" \
 
 ---
 
-### GET `/api/tickets` — paginated list (admin)
-**Auth:** admin session.
+### GET `/api/tickets` — paginated list
+**Auth:** any authenticated session.
 
 **Query params:** `type`, `status`, `owner` (all validated against enums → `400` if invalid), `page` (0-indexed), `size`, `sort` (`field,direction`; default `createdAt,DESC`; sortable fields: `createdAt`, `updatedAt`, `status`, `type`, `owner`, `title`).
 
@@ -214,16 +218,16 @@ Response is the Spring-Data-style page shape:
 |--------|---------|
 | `200` + page | list |
 | `400` | invalid filter value |
-| `401` / `403` | not logged in / not admin |
+| `401` | not logged in |
 
 ---
 
-### GET `/api/tickets/board` — Kanban board (agent token · loopback · admin)
-**Auth:** agent token · loopback bypass · admin session (first match wins).
+### GET `/api/tickets/board` — Kanban board (agent token · loopback · any session)
+**Auth:** agent token · loopback bypass · any authenticated session (first match wins).
 
 All tickets grouped by status. Each column sorted by `createdAt ASC`. Tickets include `commentCount`.
 
-Skills and agents can call this with the agent token from anywhere (CI, production). The loopback bypass works on localhost only. Either way, peek the whole queue without claiming anything.
+Skills and agents can call this with the agent token from anywhere (CI, production). The loopback bypass works on localhost only. Any logged-in user can also open the board in the browser — viewing is not admin-only, only changing it is. Either way, peek the whole queue without claiming anything.
 
 ```json
 {
@@ -238,13 +242,12 @@ Skills and agents can call this with the agent token from anywhere (CI, producti
 | Result | Meaning |
 |--------|---------|
 | `200` + board | grouped tickets |
-| `401` | bad/missing token and no admin session |
-| `403` | logged in but not admin (production, no token) |
+| `401` | bad/missing token and not logged in |
 
 ---
 
-### GET `/api/tickets/summary` — counts by dimension (admin)
-**Auth:** admin session. All known enum values are always present (zero if no tickets).
+### GET `/api/tickets/summary` — counts by dimension
+**Auth:** any authenticated session. All known enum values are always present (zero if no tickets).
 
 ```json
 {
@@ -260,12 +263,12 @@ Skills and agents can call this with the agent token from anywhere (CI, producti
 | Result | Meaning |
 |--------|---------|
 | `200` + summary | counts |
-| `401` / `403` | not logged in / not admin |
+| `401` | not logged in |
 
 ---
 
-### GET `/api/tickets/:id` — one ticket
-**Auth:** loopback bypass · agent token · admin session (first match wins). Returns the full ticket including the `comments` array.
+### GET `/api/tickets/:id` — one ticket (agent token · loopback · any session)
+**Auth:** loopback bypass · agent token · any authenticated session (first match wins). Returns the full ticket including the `comments` array.
 
 **Read-only.** Never changes status, owner, or any other field.
 
@@ -273,9 +276,9 @@ Skills and agents can call this with the agent token from anywhere (CI, producti
 |--------|---------|
 | `200` + ticket | found |
 | `404` | no ticket with that id |
-| `401` / `403` | not authenticated / not admin |
+| `401` | not authenticated |
 
-Skills and agents can call this endpoint on localhost without any token when `AGENT_AUTH_ALLOW_LOOPBACK=1`. In production, send the agent token or use an admin session.
+Skills and agents can call this endpoint on localhost without any token when `AGENT_AUTH_ALLOW_LOOPBACK=1`. In production, send the agent token or log in as any user.
 
 ---
 
