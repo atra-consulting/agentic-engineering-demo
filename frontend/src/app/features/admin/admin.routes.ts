@@ -26,13 +26,11 @@ export const ADMIN_ROUTES: Routes = [
   },
   {
     path: 'tickets',
-    canActivate: [roleGuard('ROLE_ADMIN')],
     loadComponent: () =>
       import('./tickets/ticket-board.component').then((m) => m.TicketBoardComponent),
   },
   {
     path: 'tickets/:id',
-    canActivate: [roleGuard('ROLE_ADMIN')],
     loadComponent: () =>
       import('./tickets/ticket-detail.component').then((m) => m.TicketDetailComponent),
   },
