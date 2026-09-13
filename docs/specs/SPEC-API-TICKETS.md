@@ -534,7 +534,7 @@ Seven tickets carry a seeded `AGENT` comment: the five `DEFINITION` tickets (1�
 
 ## For skill authors
 
-A workshop skill drives this API as an agent. It uses the **agent-token endpoints** — the claim/finish/ask verbs **plus** the write endpoints a skill needs to file and refine a ticket: `POST /` (create), `PATCH /:id/owner`, and `POST /:id/comments` — **plus** `GET /board` (peek the queue without claiming) and `PATCH /:id/status` (move a ticket to any column, incl. `DEFINITION`). The remaining admin endpoints (`summary`, `list`, `wont-do`, `hand-to-ai`, `reset`) stay session-only for the human dashboard.
+A workshop skill drives this API as an agent. It uses the **agent-token endpoints** — the claim/finish/ask verbs **plus** the write endpoints a skill needs to file and refine a ticket: `POST /` (create), `PATCH /:id/owner`, and `POST /:id/comments` — **plus** `GET /board` (peek the queue without claiming) and `PATCH /:id/status` (move a ticket to any column, incl. `DEFINITION`). The remaining human-only-write endpoints (`wont-do`, `hand-to-ai`, `reset`) stay admin-session-only. `summary` and `list` are read-only and open to any logged-in session, but a skill has no reason to call them — they back the human dashboard's own charts and table.
 
 **Auth.** Send the shared agent token on every call. Same token as the Agent Tasks API (`AGENT_API_TOKEN`):
 
@@ -548,14 +548,14 @@ X-Agent-Token: $AGENT_API_TOKEN
 
 | Step | Call | Notes |
 |------|------|-------|
-| Peek board | `GET /api/tickets/board` | Read all columns without claiming. Agent token or loopback bypass. |
+| Peek board | `GET /api/tickets/board` | Read all columns without claiming. Agent token or loopback bypass — a session also works, but a skill has none. |
 | Create | `POST /api/tickets` | Body `{ "type", "title", "body", "fullyReady"?: boolean, "agentTaskId"?: number \| null }`. New ticket lands `DEFINITION` + `owner=HUMAN`. Optional `fullyReady` marks the ticket ready for automatic promotion. Optional `agentTaskId` links the ticket back to the claimed `agent_task` id — send the claimed id in task-backed modes, `null` in free-text mode; never omit the key. Use to file a triaged feedback item as an intake ticket. `201` on success, `400` if `agentTaskId` does not exist. |
 | Assign to AI | `PATCH /api/tickets/:id/owner` | Body `{ "owner": "AI" }`. Flips owner without changing status — "An KI übergeben" on a `DEFINITION` ticket. |
 | Comment | `POST /api/tickets/:id/comments` | Body `{ "body": string, "handBackToAi"?: boolean, "clearFullyReady"?: boolean }`. Adds a comment (stored as `author=HUMAN`). Optional `clearFullyReady` clears the `fullyReady` flag when true. Use to record what a thin ticket is missing. |
 | Set status | `PATCH /api/tickets/:id/status` | Body `{ "status" }`. Move to any column incl. `DEFINITION`. Sets/clears `solution` + `resolvedAt` on DONE transitions. |
 | Claim | `GET /api/tickets/next` | Optional `?type=FEATURE\|BUG\|CHORE`. Claims the oldest `TODO` ticket owned by `AI`, flips it to `IN_PROGRESS`. **`204` = queue empty, stop.** The response includes the full `comments` thread. |
 | Start | `POST /api/tickets/:id/start` | No body. From `TODO`+`owner=AI` → `IN_PROGRESS`. Use when you have the id but did not go through `/next`. Response includes full `comments` thread. |
-| Read | `GET /api/tickets/:id` | Re-read a ticket by id (full ticket + comments). Accepts agent token or loopback bypass. |
+| Read | `GET /api/tickets/:id` | Re-read a ticket by id (full ticket + comments). Accepts agent token or loopback bypass — a session also works, but a skill has none. |
 | Finish | `POST /api/tickets/:id/done` | Body `{ "comment"?: string }`. Only from `IN_PROGRESS`. Sets `solution=DONE`. |
 | Ask | `POST /api/tickets/:id/ask` | Body `{ "question": string }` (required). Hands the ticket to a human (`ON_HOLD`, owner→`HUMAN`). Posts the question as an `AGENT` comment. |
 
