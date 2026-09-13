@@ -10,12 +10,15 @@ set "CRM_DB_DIR=%ROOT_DIR%\backend\data"
 :: Parse arguments
 set "RESET_DB=false"
 if "%~1"=="--reset-db" set "RESET_DB=true"
-if "%~1"=="" goto :args_done
-if not "%~1"=="--reset-db" (
-    echo Usage: %~nx0 [--reset-db]
-    echo   --reset-db      Delete local SQLite database ^(will be recreated with seed data^)
-    exit /b 1
-)
+if not "%~1"=="" if not "%~1"=="--reset-db" goto :usage
+if not "%~2"=="" goto :usage
+goto :args_done
+
+:usage
+echo Usage: %~nx0 [--reset-db]
+echo   --reset-db      Delete local SQLite database ^(will be recreated with seed data^)
+exit /b 1
+
 :args_done
 
 :: --- Prerequisite checks ---
@@ -30,10 +33,23 @@ if errorlevel 1 (
 )
 
 :: Check Node.js version is 20.19+
-for /f "tokens=1 delims=v" %%n in ('node --version') do set "NODE_VERSION=%%n"
+for /f "tokens=*" %%n in ('node --version') do set "NODE_VERSION=%%n"
+set "NODE_VERSION=%NODE_VERSION:~1%"
+set "NODE_MAJOR="
+set "NODE_MINOR="
 for /f "tokens=1,2 delims=." %%a in ("%NODE_VERSION%") do (
     set "NODE_MAJOR=%%a"
     set "NODE_MINOR=%%b"
+)
+echo %NODE_MAJOR%| findstr /r "^[0-9][0-9]*$" >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: Could not determine Node.js version from "node --version" output.
+    exit /b 1
+)
+echo %NODE_MINOR%| findstr /r "^[0-9][0-9]*$" >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: Could not determine Node.js version from "node --version" output.
+    exit /b 1
 )
 set "NODE_OK=true"
 if %NODE_MAJOR% LSS 20 set "NODE_OK=false"
@@ -93,13 +109,15 @@ if not exist "node_modules\.bin\tsx.cmd" (
     call npm install
 )
 
-:: Ensure the native better-sqlite3 binary matches the current Node version.
-:: (After a Node major upgrade, the cached .node file is compiled against the
-:: old ABI and throws ERR_DLOPEN_FAILED on boot.)
-node -e "require('better-sqlite3')" >nul 2>&1
-if errorlevel 1 (
-    echo better-sqlite3 binary mismatch with Node %NODE_VERSION%, rebuilding...
-    call npm rebuild better-sqlite3
+:: Auto-create backend/.env from backend/.env.example if missing, so a fresh
+:: clone has working defaults (e.g. AGENT_API_TOKEN) without extra setup.
+if not exist "%ROOT_DIR%\backend\.env" (
+    if exist "%ROOT_DIR%\backend\.env.example" (
+        copy /y "%ROOT_DIR%\backend\.env.example" "%ROOT_DIR%\backend\.env" >nul
+        echo Created backend\.env from backend\.env.example. You can edit backend\.env to customize your local settings.
+    ) else (
+        echo WARNING: backend\.env.example not found; skipping backend\.env creation.
+    )
 )
 
 start "CRM-Backend" /b cmd /c "npx tsx --watch src/index.ts"
@@ -108,17 +126,21 @@ cd /d "%ROOT_DIR%"
 :: Wait for backend to be ready
 echo Waiting for backend to start...
 set "BACKEND_READY=false"
-for /l %%i in (1,1,60) do (
-    if "!BACKEND_READY!"=="false" (
-        curl -s -o nul -w "%%{http_code}" "http://localhost:%BACKEND_PORT%/api/health" 2>nul | findstr "200" >nul 2>&1
-        if not errorlevel 1 (
-            echo Backend is ready!
-            set "BACKEND_READY=true"
-        ) else (
-            timeout /t 1 /nobreak >nul
-        )
-    )
+set "BACKEND_TRY=0"
+
+:backend_wait_loop
+set /a BACKEND_TRY+=1
+curl -s -o nul -w "%{http_code}" "http://localhost:%BACKEND_PORT%/api/health" 2>nul | findstr "200" >nul 2>&1
+if not errorlevel 1 (
+    echo Backend is ready!
+    set "BACKEND_READY=true"
+    goto :backend_wait_done
 )
+if %BACKEND_TRY% GEQ 60 goto :backend_wait_done
+timeout /t 1 /nobreak >nul
+goto :backend_wait_loop
+
+:backend_wait_done
 if "%BACKEND_READY%"=="false" (
     echo ERROR: Backend failed to start within 60 seconds
     call :cleanup
@@ -151,17 +173,21 @@ cd /d "%ROOT_DIR%"
 :: Wait for frontend to bind (ng serve initial compile can take 30-60s)
 echo Waiting for frontend to be ready...
 set "FRONTEND_READY=false"
-for /l %%i in (1,1,120) do (
-    if "!FRONTEND_READY!"=="false" (
-        netstat -ano | findstr /c:":%FRONTEND_PORT% " | findstr "LISTENING" >nul 2>&1
-        if not errorlevel 1 (
-            echo Frontend is ready!
-            set "FRONTEND_READY=true"
-        ) else (
-            timeout /t 1 /nobreak >nul
-        )
-    )
+set "FRONTEND_TRY=0"
+
+:frontend_wait_loop
+set /a FRONTEND_TRY+=1
+netstat -ano | findstr /c:":%FRONTEND_PORT% " | findstr "LISTENING" >nul 2>&1
+if not errorlevel 1 (
+    echo Frontend is ready!
+    set "FRONTEND_READY=true"
+    goto :frontend_wait_done
 )
+if %FRONTEND_TRY% GEQ 120 goto :frontend_wait_done
+timeout /t 1 /nobreak >nul
+goto :frontend_wait_loop
+
+:frontend_wait_done
 if "%FRONTEND_READY%"=="false" (
     echo ERROR: Frontend failed to start within 120 seconds
     call :cleanup

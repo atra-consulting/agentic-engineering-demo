@@ -176,6 +176,17 @@ trap cleanup SIGINT SIGTERM EXIT
 echo "Starting backend..."
 ensure_deps "${ROOT_DIR}/backend" "tsx" "Backend"
 
+# Auto-create backend/.env from backend/.env.example if missing, so a fresh
+# clone has working defaults (e.g. AGENT_API_TOKEN) without extra setup.
+if [ -f "${ROOT_DIR}/backend/.env" ]; then
+  : # backend/.env already exists — leave it untouched, print nothing
+elif [ -f "${ROOT_DIR}/backend/.env.example" ]; then
+  cp "${ROOT_DIR}/backend/.env.example" "${ROOT_DIR}/backend/.env"
+  echo "Created backend/.env from backend/.env.example. You can edit backend/.env to customize your local settings."
+else
+  echo "WARNING: backend/.env.example not found; skipping backend/.env creation."
+fi
+
 npx tsx --watch src/index.ts &
 BACKEND_PID=$!
 cd "${ROOT_DIR}"
