@@ -184,7 +184,7 @@ All error responses follow:
 | `sessions-persistence.spec.ts` | Session row creation on login, cross-request persistence, DB row deletion on logout |
 | `szenario.spec.ts` | GET/POST/PUT/DELETE `/api/szenarien` and `/:id` — CRUD, works/waits JSON round-trip, array-length and duration-bound validation, duplicate-name 409, seeded Standard-Szenario (id=1) |
 | `ticketAgentTaskIdMigration.spec.ts` | Guarded `ticket.agentTaskId` column migration (`ensureTicketAgentTaskIdColumn`/`alterTicketAddAgentTaskIdColumn`) — repeat-call safety, duplicate-column ALTER swallowed, narrow re-throw on a genuinely different SQL error, full `runMigrations()` ordering-regression guard that recovers a simulated pre-fix DB (index + column both dropped), fresh-DB column shape (nullable, no DEFAULT), seeded rows read `agentTaskId = null` |
-| `tickets.spec.ts` | Kanban lifecycle across `/api/tickets` — `/next`, `/:id/start`, `/:id/done`, `/:id/ask`, `/:id/comments`, `/:id/wont-do`, PATCH `/:id/status` and `/:id/owner`, POST `/api/tickets`, `/:id/hand-to-ai`, `/board`, `/summary`, `/reset` — auth matrix: agent-token-or-admin-session on start/done/ask/board/status/owner/comments/create/GET :id; `/next` stays agent-token-only (GET-based CSRF surface); agentTaskId (link to app feedback, REQ-207) — create default/null/valid-id/unknown-id(400)/non-integer(400), round-trip across GET /:id, list, /board, /next, untouched by all 8 write endpoints |
+| `tickets.spec.ts` | Kanban lifecycle across `/api/tickets` — `/next`, `/:id/start`, `/:id/done`, `/:id/ask`, `/:id/comments`, `/:id/wont-do`, PATCH `/:id/status` and `/:id/owner`, POST `/api/tickets`, `/:id/hand-to-ai`, `/board`, `/summary`, `/reset` — auth matrix: agent-token-or-admin-session on start/done/ask/status/owner/comments/create; agent-token-or-authenticated-session (any logged-in role, no admin required) on board/GET :id; `/next` stays agent-token-only (GET-based CSRF surface); summary and list (GET /) widened to plain requireAuth (any role, no agent-token path); agentTaskId (link to app feedback, REQ-207) — create default/null/valid-id/unknown-id(400)/non-integer(400), round-trip across GET /:id, list, /board, /next, untouched by all 8 write endpoints |
 
 ---
 
@@ -224,6 +224,7 @@ For every new **guard**:
 1. Returns `true` when the user has the required permission or role
 2. Redirects (and returns `false`) when permission is missing
 3. Redirects when `currentUser` is null (unauthenticated)
+4. When a route's `canActivate` array changes (guard added, removed, or swapped), add a routing-composition test in `<feature>.routes.spec.ts`: pull the actual guard function out of the route's `canActivate` array and execute it via `TestBed.runInInjectionContext(...)` against a mocked `AuthService`, asserting the allow/deny outcome. Never compare guard factories (e.g. `roleGuard('ROLE_ADMIN')`) by identity or `toEqual` — each call returns a new closure, so two separately-created guards are never reference-equal. For a route where the guard was removed, assert `canActivate` is empty/absent instead. See `features/admin/admin.routes.spec.ts`.
 
 ### TestBed setup for standalone components
 
@@ -289,6 +290,7 @@ For components using `inject()` that cannot be overridden by a provider, use `Te
 | `features/person/person-list/person-list.component.spec.ts` | `PersonListComponent` — render, data binding, interactions |
 | `features/aktivitaet/aktivitaet-list/aktivitaet-list.component.spec.ts` | `AktivitaetListComponent` — render, data binding, interactions |
 | `features/chance/chance-list/chance-list.component.spec.ts` | `ChanceListComponent` — render, data binding, interactions |
+| `features/admin/admin.routes.spec.ts` | `ADMIN_ROUTES` guard composition — confirms `cron`, `agent-tasks`, `agent-tasks/:id` still redirect a `ROLE_USER` session away (guard function executed via `TestBed.runInInjectionContext`, not compared by identity); confirms `tickets`, `tickets/:id` now carry no `canActivate` guard |
 | `features/admin/agent-tasks/agent-task-detail.component.spec.ts` | `AgentTaskDetailComponent` — detail view, `statusBadgeClass()`, ticket cross-link (renders Ticket #<id> link only when ticketId is set) |
 | `features/admin/agent-tasks/agent-task-list.component.spec.ts` | `AgentTaskListComponent` — list view, source param, `statusBadgeClass()` |
 | `features/admin/agent-tasks/agent-tasks-dashboard.component.spec.ts` | `AgentTasksDashboardComponent` — summary and per-source views |
