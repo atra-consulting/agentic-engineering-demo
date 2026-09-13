@@ -51,7 +51,7 @@ Details zur API: [docs/specs/SPEC-API-TASKS.md](specs/SPEC-API-TASKS.md).
 ## Ticket-Board
 
 **URL:** <http://localhost:7200/admin/tickets>
-**Zugang:** Nur Admin (`admin` / `admin123`).
+**Zugang:** Jeder eingeloggte Nutzer sieht das Board. Ändern (Drag-and-Drop, Ticket anlegen, kommentieren, u. a. Aktionen) darf nur Admin (`admin` / `admin123`).
 
 Ein Kanban-Board. Ein einfaches Ticketsystem für das Software-Factory-Training.
 

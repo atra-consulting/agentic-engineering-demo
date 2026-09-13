@@ -1,6 +1,6 @@
 # Subagents
 
-Dieses Projekt hat 24 Subagents. Sie liegen in `.claude/agents/`. Jeder Agent ist eine Markdown-Datei.
+Dieses Projekt hat 27 Subagents. Sie liegen in `.claude/agents/`. Jeder Agent ist eine Markdown-Datei.
 
 ## Was ist ein Subagent?
 
@@ -73,21 +73,24 @@ Jede Zeile: Name, Zweck, Modell. Das Modell steht in der Agent-Datei (`model:`).
 
 ### Tooling — allgemein, nicht an die CRM-Domäne gebunden
 
-Diese sechs Agents kennen die CRM-Specs nicht. Sie lesen nur die Root-`CLAUDE.md`. `shell-*` liest zusätzlich `docs/specs/SPECS-infrastructure.md`. Du kannst sie leicht in andere Projekte übernehmen.
+Diese neun Agents kennen die CRM-Specs nicht. Sie lesen nur die Root-`CLAUDE.md`. `shell-*` liest zusätzlich `docs/specs/SPECS-infrastructure.md`. Du kannst sie leicht in andere Projekte übernehmen.
 
 | Agent | Zweck | Modell |
 |-------|-------|--------|
+| `planner` | Entwirft PRDs und Implementierungspläne. Weist Agent und Modell pro Aufgabengruppe zu. | sonnet |
 | `python-coder` | Schreibt plattformübergreifende Python-Skripte. Datenanalyse. | sonnet |
 | `python-reviewer` | Prüft Python. Korrektheit, Portabilität, externe Daten. | sonnet |
 | `shell-coder` | Schreibt Shell-Skripte für macOS, Linux, WSL. | sonnet |
 | `shell-reviewer` | Prüft Shell-Skripte. Hänger, Endlosschleifen, Portabilität. | sonnet |
 | `skill-coder` | Erstellt und ändert Claude-Code-Skills und -Subagents. | sonnet |
 | `skill-reviewer` | Prüft Skills und Subagents. | sonnet |
+| `data-reader` | Sucht rein lesend Fakten in Dateien oder im Web. Meldet die Ergebnisse. | haiku |
+| `data-writer` | Speichert fertigen Inhalt unverändert in eine Datei an bekanntem Pfad. | haiku |
 
 ## Domänengebunden oder allgemein?
 
 - **18 Agents sind an die CRM-Domäne gebunden.** Sie lesen die Specs in `docs/specs/`. Sie kennen Firma, Person, Chance und die Regeln. Willst du sie übernehmen, passt du die Specs an dein Projekt an. Siehe [TRANSFER.md](TRANSFER.md).
-- **6 Tooling-Agents sind allgemein** (`python-*`, `shell-*`, `skill-*`). Sie passen fast überall.
+- **9 Tooling-Agents sind allgemein** (`planner`, `python-*`, `shell-*`, `skill-*`, `data-*`). Sie passen fast überall.
 
 ## CI-Workflow: `do-semi-automatic.yml`
 

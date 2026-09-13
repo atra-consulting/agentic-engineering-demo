@@ -45,14 +45,17 @@ jobs:
       # --- Frontend ---
 
       - name: Frontend — install dependencies
+        if: ${{ !cancelled() }}
         working-directory: frontend
         run: npm ci
 
       - name: Frontend — run unit tests (CI)
+        if: ${{ !cancelled() }}
         working-directory: frontend
         run: npm run test:ci
 
       - name: Frontend — build
+        if: ${{ !cancelled() }}
         working-directory: frontend
         run: npx ng build
 
