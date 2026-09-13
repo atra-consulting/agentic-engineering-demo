@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { CdkDragDrop } from '@angular/cdk/drag-drop';
@@ -1210,6 +1210,21 @@ describe('TicketBoardComponent — role-based visibility (isAdmin)', () => {
 
     const dragHandles = fixture.nativeElement.querySelectorAll('.ticket-drag-handle');
     expect(dragHandles.length).toBe(0);
+  });
+
+  it('still navigates to the ticket detail page when a non-admin clicks a card body (R5.14)', async () => {
+    const fixture = await createBoard(makeMockAuthService(regularUser));
+    const router = TestBed.inject(Router);
+    spyOn(router, 'navigate');
+
+    const cardBody: HTMLElement | null = fixture.nativeElement.querySelector(
+      '#list-TODO .ticket-body-click',
+    );
+    expect(cardBody).toBeTruthy();
+
+    cardBody!.click();
+
+    expect(router.navigate).toHaveBeenCalledWith(['/admin/tickets', 1]);
   });
 
   it('keeps a non-admin card drag-disabled even when recentOnly is false (the OR condition)', async () => {
