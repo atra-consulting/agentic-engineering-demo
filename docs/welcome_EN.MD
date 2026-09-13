@@ -25,8 +25,8 @@ Full installation guide: **[SETUP.md](SETUP.md)**
 Clone the repository:
 
 ```bash
-git clone https://github.com/atra-consulting/coding-with-ai-lab.git
-cd coding-with-ai-lab
+git clone https://github.com/ksilz/coding-with-ai-demo.git
+cd coding-with-ai-demo
 ```
 
 Start the stack:
