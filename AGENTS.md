@@ -8,7 +8,7 @@ this file.
 
 Full-stack CRM application. Node.js/TypeScript (Express + Drizzle ORM + libSQL/SQLite via `@libsql/client`) backend, Angular 21 frontend. German domain model: Firma, Person, Abteilung, Adresse, Aktivitaet, Chance. Local SQLite file at `backend/data/crmdb.sqlite`; production runs on Turso cloud when `TURSO_DATABASE_URL` is set. Authentication via hardcoded users (`backend/src/config/users.ts`, bcrypt-hashed passwords), session-based and persisted to the `sessions` table (`LibsqlSessionStore`). 3 users: admin/admin123 (ADMIN), user/test123 (USER), demo/demo1234 (ADMIN). Enforcement is role-based via `requireRole('ADMIN')`; users also carry a `permissions` array, but no `requirePermission` middleware is wired up.
 
-### Autonomous Agents (advanced workshop)
+### Autonomous Agents
 
 Two independent Claude-Code-in-CI agents. Both are documented in full in [`docs/specs/SPEC-API-TASKS.md`](docs/specs/SPEC-API-TASKS.md).
 
@@ -17,13 +17,13 @@ Two independent Claude-Code-in-CI agents. Both are documented in full in [`docs/
 
 Agent endpoints authenticate with `requireAgentToken` (`AGENT_API_TOKEN`); cron triggers with `requireCronAuth` (`CRON_SECRET` or admin session). See [`docs/specs/SPEC-API-TASKS.md`](docs/specs/SPEC-API-TASKS.md) for endpoint signatures, required secrets, and board mechanics.
 
-### Ticket System (Kanban, advanced workshop)
+### Ticket System (Kanban)
 
-A fake ticketing system for the software-factory training. Sits beside `agent-tasks`. Full docs in [`docs/specs/SPEC-API-TICKETS.md`](docs/specs/SPEC-API-TICKETS.md).
+A fake ticketing system for the software-factory demo. Sits beside `agent-tasks`. Full docs in [`docs/specs/SPEC-API-TICKETS.md`](docs/specs/SPEC-API-TICKETS.md).
 
 - `ticket` + `ticket_comment` tables. Kanban board with five columns: `DEFINITION` (intake, labelled "Definition"), `TODO` (labelled "Zu bereit"), `IN_PROGRESS`, `ON_HOLD`, `DONE`. `status` is a DB enum (`CHECK` constraint). Each ticket has an **owner** — `AI` or `HUMAN`. New tickets start `owner=HUMAN`, `status=DEFINITION`. A human refines a Definition ticket then routes it: **"An KI übergeben"** (`PATCH /:id/owner {AI}` → owner=AI, stays in `DEFINITION`) or **"Nach Bereit"** (`POST /:id/hand-to-ai` → owner=AI, →`TODO`). A coding agent works `AI` tickets; humans work the rest.
 - The agent claims (`GET /api/tickets/next`), finishes (`POST /:id/done`), or **asks a question** (`POST /:id/ask` → `ON_HOLD`, owner back to `HUMAN`, question posted as an `AGENT` comment). A human answers via `POST /:id/comments` with `handBackToAi` → back to `TODO`, owner `AI`. Comments form a thread.
-- Resolution: `done` sets `solution=DONE`; an admin can set `solution=WONT_DO` (`POST /:id/wont-do`, only on `owner=HUMAN` tickets). Agent endpoints use `requireAgentToken`; write endpoints use `requireAuth` + `requireRole('ADMIN')` (or an agent-token/admin-session combo). Board at `/admin/tickets` — any logged-in user can view it; admin rights gate drag-and-drop and every other write action. Seeded with the 12 workshop specs; `POST /api/tickets/reset` re-seeds.
+- Resolution: `done` sets `solution=DONE`; an admin can set `solution=WONT_DO` (`POST /:id/wont-do`, only on `owner=HUMAN` tickets). Agent endpoints use `requireAgentToken`; write endpoints use `requireAuth` + `requireRole('ADMIN')` (or an agent-token/admin-session combo). Board at `/admin/tickets` — any logged-in user can view it; admin rights gate drag-and-drop and every other write action. Seeded with 12 demo specs; `POST /api/tickets/reset` re-seeds.
 
 ## Writing Style
 

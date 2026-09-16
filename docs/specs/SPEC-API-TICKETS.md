@@ -18,7 +18,7 @@ status:  DEFINITION ─(PATCH /:id/owner {AI})──▶ DEFINITION (owner→AI, 
                                                                └──(POST /ask)───▶ ON_HOLD (owner→HUMAN)
                                                                                   └──(POST /comments + handBackToAi)──▶ TODO (owner→AI)
          (POST /wont-do)  DONE with solution=WONT_DO — owner must be HUMAN, status must not be DONE
-         (POST /reset)    deletes all data and re-seeds 12 workshop tickets
+         (POST /reset)    deletes all data and re-seeds 12 demo tickets
 ```
 
 New tickets start in **`DEFINITION`** — the intake/refinement column (leftmost on the board, shown as "Definition"). A human refines the ticket via the comment thread, then either routes it with one of two actions, or — if `write-ticket` already flagged it `fullyReady=true` — `do-fully-automatic` routes it automatically, with no human action at all:
@@ -430,7 +430,7 @@ curl -s -X POST -H "Authorization: Bearer $AGENT_API_TOKEN" \
 ### POST `/api/tickets/reset` — re-seed all tickets (admin)
 **Auth:** admin session. No body.
 
-Deletes all rows in `ticket_comment` and `ticket`, then re-seeds the 12 workshop tickets. Returns the count of seeded tickets.
+Deletes all rows in `ticket_comment` and `ticket`, then re-seeds the 12 demo tickets. Returns the count of seeded tickets.
 
 ```json
 { "seeded": 12 }
@@ -506,7 +506,7 @@ All errors use the app-wide handler:
 
 ## Seed data
 
-12 workshop tickets seeded via `backend/src/seed/ticketSeed.ts`. Like `agent_task`, the ticket seed runs on **every** startup: `runMigrations()` calls `seedTickets()` unconditionally, and it uses `INSERT OR IGNORE` — so existing rows stay untouched and only missing ids (1–12) get re-inserted. `POST /reset` is different: it fully wipes `ticket_comment` + `ticket` and re-seeds from scratch.
+12 demo tickets seeded via `backend/src/seed/ticketSeed.ts`. Like `agent_task`, the ticket seed runs on **every** startup: `runMigrations()` calls `seedTickets()` unconditionally, and it uses `INSERT OR IGNORE` — so existing rows stay untouched and only missing ids (1–12) get re-inserted. `POST /reset` is different: it fully wipes `ticket_comment` + `ticket` and re-seeds from scratch.
 
 | # | Title | Type | Status | Owner |
 |---|-------|------|--------|-------|
@@ -534,7 +534,7 @@ Seven tickets carry a seeded `AGENT` comment: the five `DEFINITION` tickets (1�
 
 ## For skill authors
 
-A workshop skill drives this API as an agent. It uses the **agent-token endpoints** — the claim/finish/ask verbs **plus** the write endpoints a skill needs to file and refine a ticket: `POST /` (create), `PATCH /:id/owner`, and `POST /:id/comments` — **plus** `GET /board` (peek the queue without claiming) and `PATCH /:id/status` (move a ticket to any column, incl. `DEFINITION`). The remaining human-only-write endpoints (`wont-do`, `hand-to-ai`, `reset`) stay admin-session-only. `summary` and `list` are read-only and open to any logged-in session, but a skill has no reason to call them — they back the human dashboard's own charts and table.
+A headless skill drives this API as an agent. It uses the **agent-token endpoints** — the claim/finish/ask verbs **plus** the write endpoints a skill needs to file and refine a ticket: `POST /` (create), `PATCH /:id/owner`, and `POST /:id/comments` — **plus** `GET /board` (peek the queue without claiming) and `PATCH /:id/status` (move a ticket to any column, incl. `DEFINITION`). The remaining human-only-write endpoints (`wont-do`, `hand-to-ai`, `reset`) stay admin-session-only. `summary` and `list` are read-only and open to any logged-in session, but a skill has no reason to call them — they back the human dashboard's own charts and table.
 
 **Auth.** Send the shared agent token on every call. Same token as the Agent Tasks API (`AGENT_API_TOKEN`):
 

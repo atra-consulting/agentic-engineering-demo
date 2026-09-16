@@ -7,7 +7,7 @@ metadata:
 
 Agent-tasks (sources EMAIL, GITHUB_ISSUE, APP_LOG, ERROR_REPORT) must be REJECTED when they lack enough facts to build one concrete change. A clean ABLEHNEN gives the human a specific, actionable correction list.
 
-**Why:** The autonomous runner (`do-factory-automatic` skill / `/admin/agent-tasks`) decides solve-or-reject without human input. A vague task forces guessing, which the workflow forbids. Rejection with a checklist is the correct, safe outcome.
+**Why:** The autonomous runner (`agent-task-runner.yml` GitHub Actions workflow, driven by prompts under `.claude/prompts/agent-*.md`) decides solve-or-reject without human input. A vague task forces guessing, which the workflow forbids. Rejection with a checklist is the correct, safe outcome.
 
 **How to apply:** Reject when the task does not name ALL of:
 - Affected entity or area (Firma, Person, Abteilung, Adresse, Aktivitaet, Chance, login, ...)

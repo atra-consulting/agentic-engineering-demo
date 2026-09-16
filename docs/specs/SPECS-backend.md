@@ -150,14 +150,14 @@ Agent endpoints are authenticated via `requireAgentToken` (see [agentAuth.ts](#a
 
 ### Tickets (`/api/tickets`)
 
-Fake Kanban ticket system for the software-factory training. Board mechanics and full contract: see [docs/specs/SPEC-API-TICKETS.md](SPEC-API-TICKETS.md). Status enum: `DEFINITION → TODO → IN_PROGRESS → ON_HOLD → DONE`. Owner: `AI` or `HUMAN`. New tickets start `owner=HUMAN`, `status=DEFINITION`.
+Fake Kanban ticket system for the software-factory demo. Board mechanics and full contract: see [docs/specs/SPEC-API-TICKETS.md](SPEC-API-TICKETS.md). Status enum: `DEFINITION → TODO → IN_PROGRESS → ON_HOLD → DONE`. Owner: `AI` or `HUMAN`. New tickets start `owner=HUMAN`, `status=DEFINITION`.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/tickets/next?type=X` | requireAgentToken | Claim oldest `TODO`+`AI` ticket → `IN_PROGRESS`. Optional `type` filter. 204 when none |
 | GET | `/api/tickets/board` | requireAgentTokenOrAuthenticatedSession | Full board, grouped by column (agent token, loopback, or any logged-in session) |
 | GET | `/api/tickets/summary` | requireAuth | Per-column counts (any logged-in session) |
-| POST | `/api/tickets/reset` | requireAuth + requireRole('ADMIN') | Re-seed the 12 workshop tickets |
+| POST | `/api/tickets/reset` | requireAuth + requireRole('ADMIN') | Re-seed the 12 demo tickets |
 | GET | `/api/tickets` | requireAuth | Paginated list; filter by `type`, `status`, `owner` (any logged-in session) |
 | POST | `/api/tickets` | requireAgentTokenOrAdminSession | Create → 201 (`owner=HUMAN`, `status=DEFINITION`; agent token, loopback, or admin session) |
 | GET | `/api/tickets/:id` | requireAgentTokenOrAuthenticatedSession | Single ticket (agent token, loopback, or any logged-in session) |
