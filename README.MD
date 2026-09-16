@@ -349,10 +349,10 @@ Läuft headless (`claude -p`). Kein Mensch antwortet. Arbeitet genau ein Kanban-
 
 Läuft headless (`claude -p`). Kein Mensch antwortet. Arbeitet genau ein Kanban-Ticket pro Lauf.
 
-- **Wann nutzen:** In CI. Für unbeaufsichtigte Läufe. Wie `/do-semi-automatic`, aber auch für Tickets, die ein Mensch per „An KI übergeben" der KI zugewiesen hat, aber noch nicht per „Nach Bereit" freigegeben hat.
-- **Was passiert:** Bereit+KI-Tickets baut der Skill exakt wie `/do-semi-automatic`. Bei Definition+KI-Tickets beurteilt er zusätzlich selbst, ob sie beförderungsreif sind: ist ja, befördert er sie selbst nach „Bereit" und baut sie über `plan-and-do`; ist nein, hinterlässt er einen Kommentar und gibt an einen Menschen zurück (gleiches „zurück auf Definition"-Ergebnis wie bei einem zu dünnen Bereit-Ticket). Kein Push, kein PR.
-- **Argumente (optional):** `[ticket-id | ticket-url] [comment]`. Ohne Argument nimmt der Skill zuerst das nächste Ready+AI-Ticket, sonst das nächste Definition+AI-Ticket. Reine Zahl → Ticket-ID. Ticket-URL (z. B. `http://localhost:7200/admin/tickets/11`) → Ticket-ID aus der URL. Mit ID oder URL überspringt der Skill die Suche. Nach ID oder URL darf ein freier Hinweis folgen — ohne Anführungszeichen, alles nach dem ersten Token zählt. Er geht beim Bauen unverändert an `plan-and-do`.
-- **Wichtig:** Der Skill ruft nie `AskUserQuestion`. Er hält nie an. Er braucht `AGENT_API_TOKEN` in der Umgebung (siehe [Voraussetzung](#voraussetzung-backendenv-für-die-headless-skills)). „An KI übergeben" bleibt der einzige Mensch-Checkpoint — dieser Skill entscheidet nur, ob ein bereits der KI zugewiesenes Ticket weiterlaufen darf.
+- **Wann nutzen:** In CI. Für unbeaufsichtigte Läufe. Wie `/do-semi-automatic`, aber auch für Tickets, die ein Mensch per „An KI übergeben" der KI zugewiesen hat, aber noch nicht per „Nach Bereit" freigegeben hat — oder für Tickets, die `/write-ticket` selbst als beförderungsreif markiert hat (`fullyReady`), ohne dass je ein Mensch sie der KI zugewiesen hätte.
+- **Was passiert:** Bereit+KI-Tickets baut der Skill exakt wie `/do-semi-automatic`. Bei Definition+KI-Tickets (Owner `AI`) und Definition+fullyReady-Tickets (Owner `HUMAN`) beurteilt er zusätzlich selbst, ob sie beförderungsreif sind: ist ja, befördert er sie selbst nach „Bereit" und baut sie über `plan-and-do`; ist nein, hinterlässt er einen Kommentar und gibt an einen Menschen zurück (gleiches „zurück auf Definition"-Ergebnis wie bei einem zu dünnen Bereit-Ticket). Kein Push, kein PR.
+- **Argumente (optional):** `[ticket-id | ticket-url] [comment]`. Ohne Argument nimmt der Skill zuerst das nächste Ready+AI-Ticket, sonst das nächste Definition+AI-Ticket, sonst das nächste Definition+fullyReady-Ticket. Reine Zahl → Ticket-ID. Ticket-URL (z. B. `http://localhost:7200/admin/tickets/11`) → Ticket-ID aus der URL. Mit ID oder URL überspringt der Skill die Suche. Nach ID oder URL darf ein freier Hinweis folgen — ohne Anführungszeichen, alles nach dem ersten Token zählt. Er geht beim Bauen unverändert an `plan-and-do`.
+- **Wichtig:** Der Skill ruft nie `AskUserQuestion`. Er hält nie an. Er braucht `AGENT_API_TOKEN` in der Umgebung (siehe [Voraussetzung](#voraussetzung-backendenv-für-die-headless-skills)). Bei Definition+KI-Tickets bleibt „An KI übergeben" der Mensch-Checkpoint, der sie für diesen Skill sichtbar macht; bei Definition+fullyReady-Tickets gibt es keinen solchen Checkpoint — `/write-ticket` markiert sie automatisch, und der Skill befördert sie komplett ohne menschliches Zutun.
 - **Beispiel:**
   ```
   /do-fully-automatic 7
@@ -402,8 +402,8 @@ Kopiere die Subagents und Skills in den `.claude`-Ordner deines Projekts.
 
 ```bash
 mkdir -p dein-projekt/.claude
-cp -r coding-with-ai-lab/.claude/agents dein-projekt/.claude/
-cp -r coding-with-ai-lab/.claude/skills dein-projekt/.claude/
+cp -r coding-with-ai-demo/.claude/agents dein-projekt/.claude/
+cp -r coding-with-ai-demo/.claude/skills dein-projekt/.claude/
 ```
 
 Tipp: Nimm nur, was du brauchst. Die Tooling-Agents (`python-*`, `shell-*`, `skill-*`) passen fast überall. Die CRM-Agents (`be-coder`, `fe-coder` …) musst du stark anpassen.
