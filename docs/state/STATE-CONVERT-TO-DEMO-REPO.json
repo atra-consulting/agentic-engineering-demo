@@ -2,7 +2,7 @@
   "version": 1,
   "task_key": "CONVERT-TO-DEMO-REPO",
   "status": "in_progress",
-  "current_step": "7.5",
+  "current_step": "9.3",
   "started": "2026-09-16T04:29:02Z",
   "updated": "2026-09-16T04:29:02Z",
   "config": {
@@ -56,7 +56,18 @@
       {"step": "Plan draft", "agent": "planner", "model": "sonnet", "verification": "orchestrator read + reviewed"},
       {"step": "Plan review: ba-reviewer", "agent": "ba-reviewer", "model": "sonnet", "verification": "n/a (review itself)"},
       {"step": "Plan review: skill-reviewer", "agent": "skill-reviewer", "model": "sonnet", "verification": "n/a (review itself)"},
-      {"step": "Plan fix", "agent": "orchestrator (direct)", "model": "n/a", "verification": "incorporated both reviewers' findings directly into plan file"}
+      {"step": "Plan fix", "agent": "orchestrator (direct)", "model": "n/a", "verification": "incorporated both reviewers' findings directly into plan file"},
+      {"step": "Task 1: remove do-factory-automatic", "agent": "skill-coder", "model": "sonnet", "verification": "diff read + skill-reviewer (Task 9)"},
+      {"step": "Task 2: remove /tasks/", "agent": "direct", "model": "n/a", "verification": "git status confirmed removal"},
+      {"step": "Task 4: CLAUDE.md/AGENTS.md wording", "agent": "ba-writer", "model": "sonnet", "verification": "diff read + grep"},
+      {"step": "Task 5: docs/specs wording", "agent": "ba-writer", "model": "sonnet", "verification": "diff read + grep"},
+      {"step": "Task 9: review do-factory-automatic deletion", "agent": "skill-reviewer", "model": "sonnet", "verification": "n/a (review itself) - no findings"},
+      {"step": "Task 3: restructure/merge README.MD", "agent": "ba-writer", "model": "sonnet", "verification": "diff read + grep against all Task 3 acceptance criteria (agent stalled post-completion during its own self-verify; orchestrator independently verified the finished content)"},
+      {"step": "Task 6: fix docs/TOOLS.md links + wording", "agent": "ba-writer", "model": "sonnet", "verification": "diff read + grep"},
+      {"step": "Task 7: create docs/WALKTHROUGH.md", "agent": "ba-writer", "model": "sonnet", "verification": "diff read + file existence check"},
+      {"step": "Task 8: review README/CLAUDE/AGENTS/specs/TOOLS/WALKTHROUGH", "agent": "ba-reviewer", "model": "sonnet", "verification": "n/a (review itself) - 1 warning finding, fixed"},
+      {"step": "Review fix: docs/WALKTHROUGH.md fullyReady case", "agent": "ba-writer", "model": "sonnet", "verification": "diff read"},
+      {"step": "Task 11: verification (file checks, grep sweep, full test suite, build)", "agent": "direct", "model": "n/a", "verification": "all checks passed: 400 backend + 555 frontend tests, ng build succeeded"}
     ],
     "escalations": []
   },
