@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "task_key": "CONVERT-TO-DEMO-REPO",
+  "status": "in_progress",
+  "current_step": "3.4",
+  "started": "2026-09-16T04:29:02Z",
+  "updated": "2026-09-16T04:29:02Z",
+  "config": {
+    "input_mode": "freeform",
+    "user_description": "This repo used to be a training repo. Now it's a demo repo. Update README.MD and CLAUDE.md to reflect that. Remove /tasks/ and pull docs/TRANSFER.md, list of skills and agents into the README.md. Remove do-factory-automatic skill - it's a copy of do-fully-automatic.",
+    "special_instructions": null,
+    "ticket_mode": false,
+    "ticket_id": null,
+    "ticket_url": null,
+    "ticket_api_base": null,
+    "ticket_claimed": false,
+    "branch_name": "convert-to-demo-repo-readme-cleanup",
+    "original_branch": "main",
+    "original_head": "3916696c3fef183dee75bc00f60e2e4eea6b4af4",
+    "docs_folder": "docs",
+    "is_git_repo": true,
+    "workflow_scope": null,
+    "pr_prefix": null,
+    "pr_exists": false,
+    "pr_url": null,
+    "keep_settings": {
+      "prd": "always",
+      "plan": "always",
+      "review": "always",
+      "state": "never"
+    },
+    "keep_files": null,
+    "open_md_setting": "always",
+    "auto_open_md": true
+  },
+  "discovery": {
+    "agents_available": false,
+    "planner_agents": [],
+    "writer_agents": [],
+    "coding_agents": [],
+    "review_agents": [],
+    "test_coding_agents": [],
+    "test_review_agents": [],
+    "test_runner_agents": [],
+    "tooling_coding_agents": [],
+    "tooling_review_agents": [],
+    "test_command": null
+  },
+  "artifacts": {
+    "prd_skipped": null,
+    "prd_file": null,
+    "plan_file": null
+  },
+  "delegation": {
+    "assignments": [],
+    "escalations": []
+  },
+  "completed_steps": []
+}
