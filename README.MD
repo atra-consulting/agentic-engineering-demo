@@ -546,6 +546,7 @@ Konventionen und Patterns für AI-gestützte Entwicklung: **[AGENTS.md](AGENTS.m
 | [docs/SETUP.md](docs/SETUP.md) | Vollständige Installationsanleitung (Node.js, Claude Code, IDE) |
 | [docs/CHEATSHEET-CLAUDE-CODE.md](docs/CHEATSHEET-CLAUDE-CODE.md) | Claude Code Spickzettel für Einsteiger |
 | [docs/TOOLS.md](docs/TOOLS.md) | Produktivitäts-Rechner, Agent-Tasks, Ticket-Board |
+| [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) | Pipeline: Feedback triagieren (`/write-ticket`), dann bauen (`/do-semi-automatic` / `/do-fully-automatic`) |
 | [AGENTS.md](AGENTS.md) | Anweisungen und Konventionen für AI-Coding-Assistenten (tool-neutral) |
 | [CLAUDE.md](CLAUDE.md) | Claude-Code-Spezifika (Subagents, Spec-Leselisten) — importiert `AGENTS.md` |
 | [docs/specs/SPECS.md](docs/specs/SPECS.md) | Detaillierte Spezifikationen pro Bereich |
