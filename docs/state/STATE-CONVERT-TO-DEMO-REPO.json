@@ -2,13 +2,13 @@
   "version": 1,
   "task_key": "CONVERT-TO-DEMO-REPO",
   "status": "in_progress",
-  "current_step": "3.4",
+  "current_step": "7.5",
   "started": "2026-09-16T04:29:02Z",
   "updated": "2026-09-16T04:29:02Z",
   "config": {
     "input_mode": "freeform",
     "user_description": "This repo used to be a training repo. Now it's a demo repo. Update README.MD and CLAUDE.md to reflect that. Remove /tasks/ and pull docs/TRANSFER.md, list of skills and agents into the README.md. Remove do-factory-automatic skill - it's a copy of do-fully-automatic.",
-    "special_instructions": null,
+    "special_instructions": "Add a walkthrough doc (docs/WALKTHROUGH.md) describing the pipeline: use /write-ticket to triage a feedback item into a new Kanban ticket, then either /do-fully-automatic or /do-semi-automatic to build it (explain when to use which). German, short-sentence style matching docs/TOOLS.md. Link it from README.MD's documentation table.",
     "ticket_mode": false,
     "ticket_id": null,
     "ticket_url": null,
@@ -19,8 +19,8 @@
     "original_head": "3916696c3fef183dee75bc00f60e2e4eea6b4af4",
     "docs_folder": "docs",
     "is_git_repo": true,
-    "workflow_scope": null,
-    "pr_prefix": null,
+    "workflow_scope": "full",
+    "pr_prefix": "feat:",
     "pr_exists": false,
     "pr_url": null,
     "keep_settings": {
@@ -29,30 +29,35 @@
       "review": "always",
       "state": "never"
     },
-    "keep_files": null,
+    "keep_files": {"plan": true, "review": true, "state": false},
     "open_md_setting": "always",
     "auto_open_md": true
   },
   "discovery": {
-    "agents_available": false,
-    "planner_agents": [],
-    "writer_agents": [],
-    "coding_agents": [],
-    "review_agents": [],
-    "test_coding_agents": [],
-    "test_review_agents": [],
-    "test_runner_agents": [],
-    "tooling_coding_agents": [],
-    "tooling_review_agents": [],
-    "test_command": null
+    "agents_available": true,
+    "planner_agents": ["planner"],
+    "writer_agents": ["ba-writer", "data-writer"],
+    "coding_agents": ["be-coder", "db-coder", "fe-coder", "ui-designer"],
+    "review_agents": ["ba-reviewer", "be-reviewer", "db-reviewer", "fe-reviewer", "ui-reviewer", "requirements-reviewer"],
+    "test_coding_agents": ["be-test-coder", "fe-test-coder"],
+    "test_review_agents": ["be-test-reviewer", "fe-test-reviewer"],
+    "test_runner_agents": ["be-test-runner", "fe-test-runner"],
+    "tooling_coding_agents": ["python-coder", "shell-coder", "skill-coder"],
+    "tooling_review_agents": ["python-reviewer", "shell-reviewer", "skill-reviewer"],
+    "test_command": "Backend: cd backend && npm test | Frontend: cd frontend && npx ng test --watch=false"
   },
   "artifacts": {
-    "prd_skipped": null,
+    "prd_skipped": true,
     "prd_file": null,
-    "plan_file": null
+    "plan_file": "docs/plans/PLAN-CONVERT-TO-DEMO-REPO.md"
   },
   "delegation": {
-    "assignments": [],
+    "assignments": [
+      {"step": "Plan draft", "agent": "planner", "model": "sonnet", "verification": "orchestrator read + reviewed"},
+      {"step": "Plan review: ba-reviewer", "agent": "ba-reviewer", "model": "sonnet", "verification": "n/a (review itself)"},
+      {"step": "Plan review: skill-reviewer", "agent": "skill-reviewer", "model": "sonnet", "verification": "n/a (review itself)"},
+      {"step": "Plan fix", "agent": "orchestrator (direct)", "model": "n/a", "verification": "incorporated both reviewers' findings directly into plan file"}
+    ],
     "escalations": []
   },
   "completed_steps": []
