@@ -49,11 +49,12 @@ Baut genau ein `Bereit+KI`-Ticket. Voraussetzung: ein Mensch hat das Ticket scho
 
 ### `/do-fully-automatic`
 
-Macht alles, was `/do-semi-automatic` macht — plus einen zusätzlichen Fall.
+Macht alles, was `/do-semi-automatic` macht — plus zwei zusätzliche Fälle.
 
 - Nimmt zuerst ein `Bereit+KI`-Ticket, genau wie `/do-semi-automatic`.
 - Gibt es keins, nimmt er ein `Definition+KI`-Ticket — ein Ticket, das ein Mensch per „An KI übergeben" zugewiesen, aber nicht per „Nach Bereit" freigegeben hat.
-- Bei so einem Ticket beurteilt der Skill selbst, ob es beförderungsreif ist. Ist ja: er befördert es selbst nach „Bereit" und baut es. Ist nein: Kommentar, zurück an den Menschen.
+- Gibt es auch keins, nimmt er ein `Definition+fullyReady`-Ticket (Owner `HUMAN`) — ein Ticket, das nie ein Mensch der KI zugewiesen hat. `/write-ticket` hat es nur als `fullyReady` markiert, weil das Feedback detailliert genug war.
+- Bei den beiden Definition-Fällen beurteilt der Skill selbst, ob das Ticket beförderungsreif ist. Ist ja: er befördert es selbst nach „Bereit" und baut es. Ist nein: Kommentar, zurück an den Menschen.
 
 ## Wann welchen Skill nutzen
 
@@ -63,6 +64,7 @@ Macht alles, was `/do-semi-automatic` macht — plus einen zusätzlichen Fall.
 | Kontrollierte, zweistufige Übergabe gewünscht — Mensch entscheidet über die Reife | `/do-semi-automatic` |
 | Möglichst wenig menschliche Eingriffe, auch die Reife-Entscheidung soll die KI treffen | `/do-fully-automatic` |
 | Ticket steht bei „An KI übergeben" fest, aber noch nicht bei „Nach Bereit" | `/do-fully-automatic` |
+| Ticket wurde nie einem Menschen zugewiesen, aber `/write-ticket` hat es als `fullyReady` markiert | `/do-fully-automatic` |
 
 Kurz: `/do-semi-automatic` für den kontrollierten Weg mit menschlichem Freigabe-Klick. `/do-fully-automatic` für den autonomeren Weg — die KI trifft auch die Beförderungs-Entscheidung.
 
@@ -100,7 +102,7 @@ Oder vollautomatisch ohne den manuellen Klick:
   → neues Ticket #14, Status „Definition", Owner HUMAN, fullyReady=true
 
 /do-fully-automatic
-  → Skill findet Ticket #14 als Definition+KI/fullyReady, befördert es selbst
+  → Skill findet Ticket #14 als Definition+fullyReady (Owner HUMAN), befördert es selbst
   → Status „Bereit" → „In Arbeit" → „Erledigt"
 ```
 
