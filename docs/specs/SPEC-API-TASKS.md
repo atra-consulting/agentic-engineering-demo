@@ -151,7 +151,7 @@ curl -s -X POST -H "Authorization: Bearer $AGENT_API_TOKEN" \
 ### POST `/api/agent-tasks/reset` — re-arm all tasks (admin)
 **Auth:** admin session. No body.
 
-Sets every task back to `OPEN` and clears `comment`, `pickedUpAt`, `resolvedAt`. Used to re-run the workshop without `--reset-db`.
+Sets every task back to `OPEN` and clears `comment`, `pickedUpAt`, `resolvedAt`. Used to re-run the demo without `--reset-db`.
 
 ```json
 { "reset": 23 }
@@ -371,7 +371,7 @@ A **second** autonomous agent, separate from the agent-task runner. It works aga
 
 ## For skill authors
 
-A workshop skill drives this API as an agent. Use the **agent endpoints only** — the admin endpoints (`summary`, `reset`, list, detail) are for the human dashboard.
+A headless skill drives this API as an agent. Use the **agent endpoints only** — the admin endpoints (`summary`, `reset`, list, detail) are for the human dashboard.
 
 **Auth.** Send the agent token on every call (`AGENT_API_TOKEN`). Same token and header scheme as the Tickets API:
 
