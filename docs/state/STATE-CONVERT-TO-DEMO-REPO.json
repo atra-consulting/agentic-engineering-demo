@@ -2,7 +2,7 @@
   "version": 1,
   "task_key": "CONVERT-TO-DEMO-REPO",
   "status": "in_progress",
-  "current_step": "9.3",
+  "current_step": "11.2",
   "started": "2026-09-16T04:29:02Z",
   "updated": "2026-09-16T04:29:02Z",
   "config": {
@@ -67,7 +67,10 @@
       {"step": "Task 7: create docs/WALKTHROUGH.md", "agent": "ba-writer", "model": "sonnet", "verification": "diff read + file existence check"},
       {"step": "Task 8: review README/CLAUDE/AGENTS/specs/TOOLS/WALKTHROUGH", "agent": "ba-reviewer", "model": "sonnet", "verification": "n/a (review itself) - 1 warning finding, fixed"},
       {"step": "Review fix: docs/WALKTHROUGH.md fullyReady case", "agent": "ba-writer", "model": "sonnet", "verification": "diff read"},
-      {"step": "Task 11: verification (file checks, grep sweep, full test suite, build)", "agent": "direct", "model": "n/a", "verification": "all checks passed: 400 backend + 555 frontend tests, ng build succeeded"}
+      {"step": "Task 11: verification (file checks, grep sweep, full test suite, build)", "agent": "direct", "model": "n/a", "verification": "all checks passed: 400 backend + 555 frontend tests, ng build succeeded"},
+      {"step": "Code review (embedded /review, 2 rounds)", "agent": "ba-reviewer", "model": "sonnet", "verification": "n/a (review itself) - round 1: 2 warnings fixed via ba-writer with one plan-review revision cycle; round 2: clean"},
+      {"step": "Post-review testing: be-test-runner", "agent": "be-test-runner", "model": "haiku", "verification": "400/400 passed"},
+      {"step": "Post-review testing: fe-test-runner", "agent": "fe-test-runner", "model": "haiku", "verification": "555/555 passed"}
     ],
     "escalations": []
   },
