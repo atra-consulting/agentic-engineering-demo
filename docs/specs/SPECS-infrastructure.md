@@ -150,7 +150,7 @@ Sessions stored in the `sessions` table via `LibsqlSessionStore` (`backend/src/m
 
 Launches full stack in order:
 
-1. **Backend** (Port 7070) — installs npm dependencies if missing, starts with `npx tsx --watch`
+1. **Backend** (Port 7070) — installs npm dependencies if missing, creates `backend/.env` from `backend/.env.example` if missing (same in `start.bat`), starts with `npx tsx --watch`
 2. Waits for `GET /api/health` to return HTTP 200
 3. **Frontend** (Port 7200) — installs npm dependencies if missing, starts with `npx ng serve`
 

@@ -117,3 +117,73 @@ export function requireAgentTokenOrAdminSession(
 
   next(new UnauthorizedError('Nicht authentifiziert'));
 }
+
+// Accepts loopback bypass, agent token, OR any authenticated session.
+// Read-only sibling of requireAgentTokenOrAdminSession: same loopback and
+// token rules, but the session branch takes any logged-in user, not just ADMIN.
+// Use on read-only endpoints that every logged-in user may see.
+//
+// The loopback-bypass and token blocks below duplicate the ones above on
+// purpose. Extracting a shared helper would mean editing
+// requireAgentTokenOrAdminSession, which still guards seven ticket write
+// routes plus an agent-task route. Duplicating a few lines here keeps that
+// tested guard byte-for-byte untouched. Deliberate choice, not an oversight.
+export function requireAgentTokenOrAuthenticatedSession(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  const configuredToken = process.env['AGENT_API_TOKEN'];
+
+  // Loopback bypass — gated on configuredToken being set, matching requireAgentToken.
+  // Prevents accidental open access if AGENT_AUTH_ALLOW_LOOPBACK=1 is left on without a token.
+  if (configuredToken && process.env['AGENT_AUTH_ALLOW_LOOPBACK'] === '1') {
+    const remoteAddress = req.socket?.remoteAddress ?? '';
+    const localhostAddresses = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+    const hasAuthHeader = !!req.headers['authorization'] || !!req.headers['x-agent-token'];
+    const hasForwardingHeader =
+      !!req.headers['x-forwarded-for'] || !!req.headers['x-real-ip'] || !!req.headers['forwarded'];
+    if (localhostAddresses.includes(remoteAddress) && !hasAuthHeader && !hasForwardingHeader) {
+      next();
+      return;
+    }
+  }
+
+  // Agent token — if a token header is present and wrong, reject immediately.
+  // Do not fall through to session so a bad token is never silently ignored.
+  if (configuredToken) {
+    let incomingToken: string | undefined;
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      incomingToken = authHeader.slice(7);
+    } else {
+      const xAgentToken = req.headers['x-agent-token'];
+      if (typeof xAgentToken === 'string') {
+        incomingToken = xAgentToken;
+      }
+    }
+    if (incomingToken) {
+      const expectedHash = createHash('sha256').update(configuredToken).digest();
+      const incomingHash = createHash('sha256').update(incomingToken).digest();
+      if (timingSafeEqual(expectedHash, incomingHash)) {
+        next();
+        return;
+      }
+      next(new UnauthorizedError('Ungültiger Agent-Token'));
+      return;
+    }
+  }
+
+  // Any authenticated session — no role check, this guard is read-only.
+  const userId = req.session.userId;
+  if (userId) {
+    const user = findById(userId);
+    if (user) {
+      req.currentUser = user;
+      next();
+      return;
+    }
+  }
+
+  next(new UnauthorizedError('Nicht authentifiziert'));
+}

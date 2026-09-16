@@ -40,7 +40,7 @@ End-to-End-Ablauf. Planung → Implementierung → Tests → Code Review.
 
 - **Wann nutzen:** Neues Feature bauen. Aufgabe umsetzen. Schweren Bug fixen.
 - **Was passiert:** Der Skill legt einen Branch an. Er schreibt bei Bedarf eine PRD. Er schreibt einen Plan. Du gibst den Plan frei. Dann baut er den Code, testet ihn und prüft ihn. Am Ende gibt es optional einen PR.
-- **Argumente:** `["Beschreibung"] [Sonderanweisungen | resume:<schritt>]`
+- **Argumente:** `["Beschreibung"] [Sonderanweisungen | resume:<schritt>]` oder Ticket-Modus: eine Ticket-URL (z. B. `http://localhost:7200/admin/tickets/8`) oder eine reine Ticket-Nummer. `resume:<schritt>` gilt nur im Freitext-Modus.
 - **Beispiel:**
   ```
   /plan-and-do "Redis-Cache für Sessions" "Nutze node-cache mit 5 Minuten TTL"
@@ -62,6 +62,7 @@ Prüft deinen Branch gegen `main`. Mit mehreren Runden aus Prüfen und Fixen.
   - leer → normaler Review
   - `dryrun` → zeigt das Ergebnis nur am Bildschirm, schreibt keine Datei
   - `base:<ref>` → prüft gegen einen anderen Branch oder Commit statt `main`
+  - `embedded` → Aufruf aus `plan-and-do` mitten im Lauf. Überspringt Header, Plancheck und Bestätigung
   - `help` / `doctor` → Hilfe anzeigen oder Selbsttest laufen lassen
   - freier Text → Sonderanweisungen für den Review
 - **Beispiel:**
@@ -76,7 +77,7 @@ Aktualisiert `.claude/agents/`, `docs/specs/` und `CLAUDE.md`. Passend zu den Co
 
 - **Wann nutzen:** Ein Feature ist fertig. Das Schema ändert sich. Die Infrastruktur wandert.
 - **Was passiert:** Reviewer-Agents vergleichen Code und Doku. Sie melden, was veraltet ist. Writer-Agents fixen genau diese Stellen. Der Skill legt keine neue Agent- oder Spec-Datei an. Er passt nur bestehende an.
-- **Argumente (optional):** freier Text als Fokus, oder `embedded` (Aufruf aus `plan-and-do`).
+- **Argumente (optional):** freier Text als Fokus, oder `embedded` (Aufruf aus `plan-and-do`). Zweites Token `embedded base:<sha>` grenzt den Lauf auf einen Branch ein.
 - **Beispiel:**
   ```
   /update-claude-files Fokus auf die neue Ticket-API

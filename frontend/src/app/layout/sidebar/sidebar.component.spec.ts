@@ -3,6 +3,7 @@ import { ComponentFixture } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { provideRouter, RouterLink } from '@angular/router';
+import { faListCheck } from '@fortawesome/free-solid-svg-icons';
 import { SidebarComponent } from './sidebar.component';
 import { AuthService } from '../../core/services/auth.service';
 import { LayoutService } from '../../core/services/layout.service';
@@ -85,11 +86,18 @@ describe('SidebarComponent', () => {
     expect(text).not.toContain('App-Feedback');
   });
 
-  it('does not render the Administration section header when all its items are hidden', () => {
+  // The real "Administration" section can no longer end up fully hidden for any
+  // role: "Tickets" has no requiredRole (PRD-SYNC-LAB-IMPROVEMENTS.md, Open
+  // Question 3) and always keeps the section visible. The section-hiding logic in
+  // visibleItems() is still real code though, so it's exercised directly here with
+  // a synthetic, all-admin item list instead of a real section.
+  it('visibleItems returns an empty array when every item requires ROLE_ADMIN and the user only has ROLE_USER', () => {
     mockAuthService.currentUser.set(regularUser);
-    fixture.detectChanges();
-    const text = fixture.nativeElement.textContent as string;
-    expect(text).not.toContain('Administration');
+    const adminOnlyItems = [
+      { label: 'Foo', route: '/foo', icon: faListCheck, requiredRole: 'ROLE_ADMIN' },
+      { label: 'Bar', route: '/bar', icon: faListCheck, requiredRole: 'ROLE_ADMIN' },
+    ];
+    expect(component.visibleItems(adminOnlyItems)).toEqual([]);
   });
 
   it('renders the Administration section header when user has ADMIN role', () => {
@@ -97,6 +105,16 @@ describe('SidebarComponent', () => {
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Administration');
+  });
+
+  it('renders the Administration section header for a USER-role user, showing only Tickets inside it', () => {
+    mockAuthService.currentUser.set(regularUser);
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Administration');
+    expect(text).toContain('Tickets');
+    expect(text).not.toContain('App-Feedback');
+    expect(text).not.toContain('Cron-Jobs');
   });
 
   it('renders a Feedback link pointing to /feedback in the bottom nav', () => {
@@ -109,6 +127,30 @@ describe('SidebarComponent', () => {
     const anchor = linkDebugEl.nativeElement as HTMLAnchorElement;
     expect(anchor.getAttribute('href')).toBe('/feedback');
     expect((anchor.textContent as string)).toContain('Trainings-Feedback');
+  });
+
+  it('shows "Tickets" for a USER-role user (no requiredRole gate on that item)', () => {
+    mockAuthService.currentUser.set(regularUser);
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Tickets');
+  });
+
+  it('does not show "App-Feedback" or "Cron-Jobs" for a USER-role user', () => {
+    mockAuthService.currentUser.set(regularUser);
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).not.toContain('App-Feedback');
+    expect(text).not.toContain('Cron-Jobs');
+  });
+
+  it('shows "Tickets", "App-Feedback", and "Cron-Jobs" for an ADMIN-role user', () => {
+    mockAuthService.currentUser.set(adminUser);
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Tickets');
+    expect(text).toContain('App-Feedback');
+    expect(text).toContain('Cron-Jobs');
   });
 
   it('hides the Feedback label but keeps the link clickable when collapsed', () => {

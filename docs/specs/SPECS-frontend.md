@@ -28,7 +28,7 @@ Visual design, colors, layout measurements, and AG Grid theming: `docs/specs/SPE
   /aktivitaeten                 → Aktivitaet CRUD (no detail)
   /chancen                      → Chance CRUD (list/detail/form)
   /produktivitaet/rechner       → RechnerComponent (Produktivität cycle-time calculator)
-  /admin                        → Admin subtree (roleGuard per route)
+  /admin                        → Admin subtree (roleGuard on most routes; some open to any authenticated user)
     /admin/agent-tasks          → AgentTasksDashboardComponent (roleGuard('ROLE_ADMIN'))
     /admin/agent-tasks/:id      → AgentTaskDetailComponent (roleGuard('ROLE_ADMIN'))
     /admin/cron                 → CronDashboardComponent (roleGuard('ROLE_ADMIN'))

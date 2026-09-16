@@ -18,6 +18,7 @@ import { Ticket, TicketComment } from '../../../core/models/ticket.model';
 import { MarkdownPipe } from '../../../core/pipes/markdown.pipe';
 import { TicketService } from '../../../core/services/ticket.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
 
@@ -39,7 +40,7 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
 
       <div class="row g-4">
         <!-- Left: Ticket details -->
-        <div class="col-12 col-lg-8">
+        <div [class]="isAdmin ? 'col-12 col-lg-8' : 'col-12'">
           <div class="table-container mb-4">
             <div class="d-flex justify-content-between align-items-start mb-3">
               <h3 class="ticket-title mb-0">{{ ticket.title }}</h3>
@@ -105,160 +106,164 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
             }
 
             <!-- Add comment form -->
-            <div class="mt-4">
-              <h6 class="mb-2">Kommentar hinzufügen</h6>
-              @if (commentError) {
-                <div class="alert alert-danger py-2" role="alert">{{ commentError }}</div>
-              }
-              <form [formGroup]="commentForm" (ngSubmit)="addComment(false)">
-                <div class="mb-3">
-                  <textarea
-                    class="form-control"
-                    formControlName="body"
-                    rows="4"
-                    placeholder="Kommentar eingeben..."
-                  ></textarea>
-                  @if (commentForm.controls.body.invalid && commentForm.controls.body.touched) {
-                    <div class="invalid-feedback d-block">Kommentar darf nicht leer sein.</div>
-                  }
-                </div>
-                <div class="d-flex gap-2 flex-wrap">
-                  <button
-                    type="submit"
-                    class="btn btn-primary"
-                    [disabled]="savingComment"
-                  >
-                    @if (savingComment && !handingBack) {
-                      <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                    }
-                    Kommentar senden
-                  </button>
-
-                  <button
-                    type="button"
-                    class="btn btn-outline-primary"
-                    (click)="addComment(true)"
-                    [disabled]="savingComment || ticket.owner !== 'HUMAN' || commentForm.controls.body.value.trim().length === 0"
-                    title="Kommentar senden und Ticket an KI übergeben"
-                  >
-                    @if (savingComment && handingBack) {
-                      <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                    }
-                    <fa-icon [icon]="faRobot" class="me-1" />Zurück an KI
-                  </button>
-                </div>
-                @if (ticket.owner === 'AI') {
-                  <div class="form-text text-muted mt-1">Die KI ist bereits Eigentümer.</div>
-                } @else if (ticket.owner !== 'HUMAN') {
-                  <div class="form-text text-muted mt-1">"Zurück an KI" ist nur möglich, wenn der Eigentümer "Mensch" ist.</div>
+            @if (isAdmin) {
+              <div class="mt-4">
+                <h6 class="mb-2">Kommentar hinzufügen</h6>
+                @if (commentError) {
+                  <div class="alert alert-danger py-2" role="alert">{{ commentError }}</div>
                 }
-              </form>
-            </div>
+                <form [formGroup]="commentForm" (ngSubmit)="addComment(false)">
+                  <div class="mb-3">
+                    <textarea
+                      class="form-control"
+                      formControlName="body"
+                      rows="4"
+                      placeholder="Kommentar eingeben..."
+                    ></textarea>
+                    @if (commentForm.controls.body.invalid && commentForm.controls.body.touched) {
+                      <div class="invalid-feedback d-block">Kommentar darf nicht leer sein.</div>
+                    }
+                  </div>
+                  <div class="d-flex gap-2 flex-wrap">
+                    <button
+                      type="submit"
+                      class="btn btn-primary"
+                      [disabled]="savingComment"
+                    >
+                      @if (savingComment && !handingBack) {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                      }
+                      Kommentar senden
+                    </button>
+
+                    <button
+                      type="button"
+                      class="btn btn-outline-primary"
+                      (click)="addComment(true)"
+                      [disabled]="savingComment || ticket.owner !== 'HUMAN' || commentForm.controls.body.value.trim().length === 0"
+                      title="Kommentar senden und Ticket an KI übergeben"
+                    >
+                      @if (savingComment && handingBack) {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                      }
+                      <fa-icon [icon]="faRobot" class="me-1" />Zurück an KI
+                    </button>
+                  </div>
+                  @if (ticket.owner === 'AI') {
+                    <div class="form-text text-muted mt-1">Die KI ist bereits Eigentümer.</div>
+                  } @else if (ticket.owner !== 'HUMAN') {
+                    <div class="form-text text-muted mt-1">"Zurück an KI" ist nur möglich, wenn der Eigentümer "Mensch" ist.</div>
+                  }
+                </form>
+              </div>
+            }
           </div>
         </div>
 
         <!-- Right: Actions -->
-        <div class="col-12 col-lg-4">
-          <div class="table-container">
-            <h5 class="mb-3">Aktionen</h5>
+        @if (isAdmin) {
+          <div class="col-12 col-lg-4">
+            <div class="table-container">
+              <h5 class="mb-3">Aktionen</h5>
 
-            <!-- Definition actions -->
-            @if (ticket.status === 'DEFINITION') {
-              <div class="mb-3">
-                <label class="form-label fw-semibold">Definition abschließen</label>
-                <div class="d-flex flex-column gap-2">
-                  <button
-                    class="btn btn-outline-primary w-100"
-                    (click)="assignToAi()"
-                    [disabled]="savingAssignAi || savingMoveToReady || ticket.owner === 'AI'"
-                    title="Eigentümer auf KI setzen, Ticket bleibt in &quot;Definition&quot;"
-                  >
-                    @if (savingAssignAi) {
-                      <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                    }
-                    <fa-icon [icon]="faRobot" class="me-1" />An KI übergeben
-                  </button>
-                  <button
-                    class="btn btn-outline-secondary w-100"
-                    (click)="moveToReady()"
-                    [disabled]="savingAssignAi || savingMoveToReady"
-                    title="Eigentümer auf KI setzen und nach &quot;Bereit&quot; verschieben"
-                  >
-                    @if (savingMoveToReady) {
-                      <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                    }
-                    <fa-icon [icon]="faArrowRight" class="me-1" />Nach Bereit
-                  </button>
-                </div>
-              </div>
-            }
-
-            <!-- Owner toggle -->
-            @if (ticket.status !== 'DEFINITION') {
-              <div class="mb-3">
-                <label class="form-label fw-semibold">Eigentümer ändern</label>
-                <div>
-                  <button
-                    class="btn btn-outline-primary w-100"
-                    (click)="toggleOwner()"
-                    [disabled]="savingOwner"
-                    [title]="toggleOwnerTitle"
-                  >
-                    @if (savingOwner) {
-                      <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                    }
-                    @if (ticket.owner === 'HUMAN') {
+              <!-- Definition actions -->
+              @if (ticket.status === 'DEFINITION') {
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Definition abschließen</label>
+                  <div class="d-flex flex-column gap-2">
+                    <button
+                      class="btn btn-outline-primary w-100"
+                      (click)="assignToAi()"
+                      [disabled]="savingAssignAi || savingMoveToReady || ticket.owner === 'AI'"
+                      title="Eigentümer auf KI setzen, Ticket bleibt in &quot;Definition&quot;"
+                    >
+                      @if (savingAssignAi) {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                      }
                       <fa-icon [icon]="faRobot" class="me-1" />An KI übergeben
-                    } @else {
-                      <fa-icon [icon]="faUser" class="me-1" />An Mensch übergeben
-                    }
-                  </button>
+                    </button>
+                    <button
+                      class="btn btn-outline-secondary w-100"
+                      (click)="moveToReady()"
+                      [disabled]="savingAssignAi || savingMoveToReady"
+                      title="Eigentümer auf KI setzen und nach &quot;Bereit&quot; verschieben"
+                    >
+                      @if (savingMoveToReady) {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                      }
+                      <fa-icon [icon]="faArrowRight" class="me-1" />Nach Bereit
+                    </button>
+                  </div>
                 </div>
-              </div>
-            }
+              }
 
-            <!-- Won't Do -->
-            @if (ticket.owner === 'HUMAN' && ticket.status !== 'DONE') {
-              <div class="mb-3">
-                <label class="form-label fw-semibold">Abschließen als</label>
-                <div>
-                  <button
-                    class="btn btn-outline-danger w-100"
-                    (click)="markWontDo()"
-                    [disabled]="savingWontDo"
-                  >
-                    @if (savingWontDo) {
-                      <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                    }
-                    <fa-icon [icon]="faBan" class="me-1" />Wird nicht gemacht
-                  </button>
+              <!-- Owner toggle -->
+              @if (ticket.status !== 'DEFINITION') {
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Eigentümer ändern</label>
+                  <div>
+                    <button
+                      class="btn btn-outline-primary w-100"
+                      (click)="toggleOwner()"
+                      [disabled]="savingOwner"
+                      [title]="toggleOwnerTitle"
+                    >
+                      @if (savingOwner) {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                      }
+                      @if (ticket.owner === 'HUMAN') {
+                        <fa-icon [icon]="faRobot" class="me-1" />An KI übergeben
+                      } @else {
+                        <fa-icon [icon]="faUser" class="me-1" />An Mensch übergeben
+                      }
+                    </button>
+                  </div>
                 </div>
-              </div>
-            }
+              }
 
-            <!-- Info -->
-            <div class="border-top pt-3 mt-2">
-              <dl class="mb-0 small">
-                <dt class="text-muted">ID</dt>
-                <dd>#{{ ticket.id }}</dd>
-                <dt class="text-muted">Status</dt>
-                <dd><span [class]="statusBadgeClass(ticket.status)">{{ statusLabel(ticket.status) }}</span></dd>
-                <dt class="text-muted">Eigentümer</dt>
-                <dd><span [class]="ownerBadgeClass(ticket.owner)">{{ ownerLabel(ticket.owner) }}</span></dd>
-                <dt class="text-muted">Typ</dt>
-                <dd><span [class]="typeBadgeClass(ticket.type)">{{ typeLabel(ticket.type) }}</span></dd>
-                @if (ticket.solution) {
-                  <dt class="text-muted">Lösung</dt>
-                  <dd><span [class]="solutionBadgeClass(ticket.solution)">{{ solutionLabel(ticket.solution) }}</span></dd>
-                }
-                @if (ticket.agentTaskId) {
-                  <dt class="text-muted">App-Feedback</dt>
-                  <dd><a [routerLink]="['/admin/agent-tasks', ticket.agentTaskId]">App-Feedback #{{ ticket.agentTaskId }}</a></dd>
-                }
-              </dl>
+              <!-- Won't Do -->
+              @if (ticket.owner === 'HUMAN' && ticket.status !== 'DONE') {
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Abschließen als</label>
+                  <div>
+                    <button
+                      class="btn btn-outline-danger w-100"
+                      (click)="markWontDo()"
+                      [disabled]="savingWontDo"
+                    >
+                      @if (savingWontDo) {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                      }
+                      <fa-icon [icon]="faBan" class="me-1" />Wird nicht gemacht
+                    </button>
+                  </div>
+                </div>
+              }
+
+              <!-- Info -->
+              <div class="border-top pt-3 mt-2">
+                <dl class="mb-0 small">
+                  <dt class="text-muted">ID</dt>
+                  <dd>#{{ ticket.id }}</dd>
+                  <dt class="text-muted">Status</dt>
+                  <dd><span [class]="statusBadgeClass(ticket.status)">{{ statusLabel(ticket.status) }}</span></dd>
+                  <dt class="text-muted">Eigentümer</dt>
+                  <dd><span [class]="ownerBadgeClass(ticket.owner)">{{ ownerLabel(ticket.owner) }}</span></dd>
+                  <dt class="text-muted">Typ</dt>
+                  <dd><span [class]="typeBadgeClass(ticket.type)">{{ typeLabel(ticket.type) }}</span></dd>
+                  @if (ticket.solution) {
+                    <dt class="text-muted">Lösung</dt>
+                    <dd><span [class]="solutionBadgeClass(ticket.solution)">{{ solutionLabel(ticket.solution) }}</span></dd>
+                  }
+                  @if (ticket.agentTaskId) {
+                    <dt class="text-muted">App-Feedback</dt>
+                    <dd><a [routerLink]="['/admin/agent-tasks', ticket.agentTaskId]">App-Feedback #{{ ticket.agentTaskId }}</a></dd>
+                  }
+                </dl>
+              </div>
             </div>
           </div>
-        </div>
+        }
       </div>
     }
   `,
@@ -443,6 +448,11 @@ export class TicketDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private fb = inject(FormBuilder);
   private destroyRef = inject(DestroyRef);
+  private authService = inject(AuthService);
+
+  get isAdmin(): boolean {
+    return this.authService.currentUser()?.rollen.includes('ROLE_ADMIN') ?? false;
+  }
 
   ticket: Ticket | null = null;
   loading = true;

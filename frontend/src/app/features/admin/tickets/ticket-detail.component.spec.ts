@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { provideRouter, RouterLink } from '@angular/router';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -8,6 +9,8 @@ import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { TicketDetailComponent } from './ticket-detail.component';
 import { TicketService } from '../../../core/services/ticket.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { BenutzerInfo } from '../../../core/models/auth.model';
 import { Ticket, TicketComment } from '../../../core/models/ticket.model';
 
 // ─── Test-data factories ──────────────────────────────────────────────────────
@@ -44,6 +47,34 @@ function makeTicket(overrides: Partial<Ticket> = {}): Ticket {
 }
 
 const MOCK_TICKET = makeTicket();
+
+// ─── Role fixtures ─────────────────────────────────────────────────────────────
+
+const adminUser: BenutzerInfo = {
+  id: 1,
+  benutzername: 'admin',
+  vorname: 'Admin',
+  nachname: 'User',
+  email: 'admin@test.de',
+  rollen: ['ROLE_ADMIN', 'ROLE_USER'],
+  permissions: [],
+};
+
+const regularUser: BenutzerInfo = {
+  id: 2,
+  benutzername: 'user',
+  vorname: 'Regular',
+  nachname: 'User',
+  email: 'user@test.de',
+  rollen: ['ROLE_USER'],
+  permissions: [],
+};
+
+function makeMockAuthService(
+  user: BenutzerInfo | null = adminUser,
+): { currentUser: ReturnType<typeof signal<BenutzerInfo | null>> } {
+  return { currentUser: signal(user) };
+}
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -109,6 +140,34 @@ function makeModalDismissStub(): Partial<NgbModal> {
   };
 }
 
+// ─── Centralized TestBed setup ─────────────────────────────────────────────────
+// Defaults to an ADMIN user so every pre-existing (pre-role-gate) spec keeps
+// seeing the full admin UI without having to opt in explicitly. Specs that
+// exercise the non-admin view pass an explicit `authService` mock built with
+// `makeMockAuthService(regularUser)`.
+
+interface SetupTestBedOptions {
+  ticketService: jasmine.SpyObj<TicketService>;
+  notification?: jasmine.SpyObj<NotificationService>;
+  modal?: Partial<NgbModal>;
+  routeId?: string;
+  authService?: { currentUser: ReturnType<typeof signal<BenutzerInfo | null>> };
+}
+
+async function setupTestBed(options: SetupTestBedOptions): Promise<void> {
+  await TestBed.configureTestingModule({
+    imports: [TicketDetailComponent],
+    providers: [
+      provideRouter([]),
+      { provide: TicketService, useValue: options.ticketService },
+      { provide: NotificationService, useValue: options.notification ?? makeMockNotification() },
+      { provide: NgbModal, useValue: options.modal ?? makeModalStub() },
+      { provide: ActivatedRoute, useValue: makeRoute(options.routeId ?? '10') },
+      { provide: AuthService, useValue: options.authService ?? makeMockAuthService(adminUser) },
+    ],
+  }).compileComponents();
+}
+
 // ─── Basic creation and load ──────────────────────────────────────────────────
 
 describe('TicketDetailComponent — creation and load', () => {
@@ -120,16 +179,7 @@ describe('TicketDetailComponent — creation and load', () => {
     mockService = makeMockTicketService();
     mockService.getById.and.returnValue(of(MOCK_TICKET));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService });
 
     fixture = TestBed.createComponent(TicketDetailComponent);
     component = fixture.componentInstance;
@@ -162,16 +212,7 @@ describe('TicketDetailComponent — template rendering', () => {
     const mockService = makeMockTicketService();
     mockService.getById.and.returnValue(of(MOCK_TICKET));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService });
 
     fixture = TestBed.createComponent(TicketDetailComponent);
     fixture.detectChanges();
@@ -234,16 +275,7 @@ describe('TicketDetailComponent — agent-task cross-link', () => {
     const mockService = makeMockTicketService();
     mockService.getById.and.returnValue(of(linkedTicket));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService });
 
     const fixture = TestBed.createComponent(TicketDetailComponent);
     fixture.detectChanges();
@@ -264,16 +296,7 @@ describe('TicketDetailComponent — agent-task cross-link', () => {
     const mockService = makeMockTicketService();
     mockService.getById.and.returnValue(of(unlinkedTicket));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService });
 
     const fixture = TestBed.createComponent(TicketDetailComponent);
     fixture.detectChanges();
@@ -299,16 +322,7 @@ describe('TicketDetailComponent — no comments', () => {
     const mockService = makeMockTicketService();
     mockService.getById.and.returnValue(of(ticketNoComments));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService });
 
     fixture = TestBed.createComponent(TicketDetailComponent);
     fixture.detectChanges();
@@ -332,16 +346,7 @@ describe('TicketDetailComponent — error state', () => {
     const mockService = makeMockTicketService();
     mockService.getById.and.returnValue(throwError(() => new Error('Not found')));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('99') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService, routeId: '99' });
 
     const fixture = TestBed.createComponent(TicketDetailComponent);
     fixture.detectChanges();
@@ -367,16 +372,7 @@ describe('TicketDetailComponent — "Zurück an KI" (handBackToAi)', () => {
     mockService.getById.and.returnValue(of(humanTicket));
     mockService.addComment.and.returnValue(of({ ...humanTicket, owner: 'AI', status: 'TODO' }));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService });
 
     fixture = TestBed.createComponent(TicketDetailComponent);
     component = fixture.componentInstance;
@@ -473,16 +469,7 @@ describe('TicketDetailComponent — addComment() error path', () => {
     mockService.getById.and.returnValue(of(makeTicket({ owner: 'HUMAN', status: 'ON_HOLD' })));
     mockService.addComment.and.returnValue(throwError(() => new Error('Server error')));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService });
 
     fixture = TestBed.createComponent(TicketDetailComponent);
     component = fixture.componentInstance;
@@ -527,16 +514,7 @@ describe('TicketDetailComponent — "Won\'t Do" button', () => {
       of({ ...humanOnHoldTicket, status: 'DONE', solution: 'WONT_DO' }),
     );
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: mockNotification },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService, notification: mockNotification });
 
     fixture = TestBed.createComponent(TicketDetailComponent);
     component = fixture.componentInstance;
@@ -582,17 +560,11 @@ describe('TicketDetailComponent — "Won\'t Do" dismissed modal', () => {
       of({ ...humanOnHoldTicket, status: 'DONE', solution: 'WONT_DO' }),
     );
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        // Dismiss stub — modal promise rejects
-        { provide: NgbModal, useValue: makeModalDismissStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({
+      ticketService: mockService,
+      // Dismiss stub — modal promise rejects
+      modal: makeModalDismissStub(),
+    });
 
     const fixture = TestBed.createComponent(TicketDetailComponent);
     component = fixture.componentInstance;
@@ -615,16 +587,7 @@ describe('TicketDetailComponent — "Won\'t Do" hidden when owner=AI', () => {
     const mockService = makeMockTicketService();
     mockService.getById.and.returnValue(of(aiTicket));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService });
 
     const fixture = TestBed.createComponent(TicketDetailComponent);
     fixture.detectChanges();
@@ -638,16 +601,7 @@ describe('TicketDetailComponent — "Won\'t Do" hidden when owner=AI', () => {
     const mockService = makeMockTicketService();
     mockService.getById.and.returnValue(of(doneTicket));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService });
 
     const fixture = TestBed.createComponent(TicketDetailComponent);
     fixture.detectChanges();
@@ -677,16 +631,7 @@ describe('TicketDetailComponent — toggleOwner()', () => {
     // status to TODO via setStatus(); the final ticket comes from this call.
     mockService.setStatus.and.returnValue(of({ ...humanTicket, owner: 'AI', status: 'TODO' }));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService });
 
     fixture = TestBed.createComponent(TicketDetailComponent);
     component = fixture.componentInstance;
@@ -755,16 +700,7 @@ describe('TicketDetailComponent — DEFINITION status actions', () => {
     );
     mockService.setStatus.and.returnValue(of({ ...definitionTicket, status: 'TODO' }));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: mockNotification },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService, notification: mockNotification });
 
     fixture = TestBed.createComponent(TicketDetailComponent);
     component = fixture.componentInstance;
@@ -882,16 +818,7 @@ describe('TicketDetailComponent — Definition actions absent for non-DEFINITION
     const mockService = makeMockTicketService();
     mockService.getById.and.returnValue(of(todoTicket));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService });
 
     const fixture = TestBed.createComponent(TicketDetailComponent);
     fixture.detectChanges();
@@ -912,16 +839,7 @@ describe('TicketDetailComponent — Definition actions absent for non-DEFINITION
     const mockService = makeMockTicketService();
     mockService.getById.and.returnValue(of(todoTicket));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService });
 
     const fixture = TestBed.createComponent(TicketDetailComponent);
     fixture.detectChanges();
@@ -940,16 +858,7 @@ describe('TicketDetailComponent — badge helper methods', () => {
     const mockService = makeMockTicketService();
     mockService.getById.and.returnValue(of(MOCK_TICKET));
 
-    await TestBed.configureTestingModule({
-      imports: [TicketDetailComponent],
-      providers: [
-        provideRouter([]),
-        { provide: TicketService, useValue: mockService },
-        { provide: NotificationService, useValue: makeMockNotification() },
-        { provide: NgbModal, useValue: makeModalStub() },
-        { provide: ActivatedRoute, useValue: makeRoute('10') },
-      ],
-    }).compileComponents();
+    await setupTestBed({ ticketService: mockService });
 
     const fixture = TestBed.createComponent(TicketDetailComponent);
     component = fixture.componentInstance;
@@ -986,5 +895,79 @@ describe('TicketDetailComponent — badge helper methods', () => {
 
   it('solutionBadgeClass returns "badge badge-solution-wontdo" for WONT_DO', () => {
     expect(component.solutionBadgeClass('WONT_DO')).toBe('badge badge-solution-wontdo');
+  });
+});
+
+// ─── Role-based visibility (isAdmin) — R5.15 / R5.17 ─────────────────────────
+// Admins see the comment form, the "Aktionen" panel and its nested Info block.
+// Non-admins see none of those three, but keep the ticket data and the full
+// comment thread, in a full-width left column.
+
+describe('TicketDetailComponent — role-based visibility (isAdmin)', () => {
+  describe('admin user', () => {
+    let fixture: ComponentFixture<TicketDetailComponent>;
+
+    beforeEach(async () => {
+      const mockService = makeMockTicketService();
+      mockService.getById.and.returnValue(of(MOCK_TICKET));
+
+      await setupTestBed({ ticketService: mockService, authService: makeMockAuthService(adminUser) });
+
+      fixture = TestBed.createComponent(TicketDetailComponent);
+      fixture.detectChanges();
+    });
+
+    it('shows the comment form, the "Aktionen" panel, and the nested Info block', () => {
+      expect(fixture.nativeElement.querySelector('form')).toBeTruthy();
+
+      const actionsPanel: HTMLElement | null = fixture.nativeElement.querySelector('.col-12.col-lg-4');
+      expect(actionsPanel).toBeTruthy();
+      expect(actionsPanel!.textContent).toContain('Aktionen');
+
+      expect(fixture.nativeElement.querySelector('.border-top.pt-3.mt-2')).toBeTruthy();
+    });
+
+    it('renders the left column with the col-lg-8 class', () => {
+      const leftColumn: HTMLElement = fixture.nativeElement.querySelector('.row.g-4 > div');
+      expect(leftColumn).toBeTruthy();
+      expect(leftColumn.className.trim()).toBe('col-12 col-lg-8');
+    });
+  });
+
+  describe('non-admin user', () => {
+    let fixture: ComponentFixture<TicketDetailComponent>;
+
+    beforeEach(async () => {
+      const mockService = makeMockTicketService();
+      mockService.getById.and.returnValue(of(MOCK_TICKET));
+
+      await setupTestBed({ ticketService: mockService, authService: makeMockAuthService(regularUser) });
+
+      fixture = TestBed.createComponent(TicketDetailComponent);
+      fixture.detectChanges();
+    });
+
+    it('hides the comment form, the "Aktionen" panel, and the nested Info block', () => {
+      expect(fixture.nativeElement.querySelector('form')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.col-12.col-lg-4')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.border-top.pt-3.mt-2')).toBeNull();
+    });
+
+    it('still renders ticket data and the full comment thread', () => {
+      const text: string = fixture.nativeElement.textContent;
+      expect(text).toContain('CSV-Export für Firmenliste');
+      expect(text).toContain('Comment 1 body');
+      expect(text).toContain('Comment 2 body');
+
+      const commentItems = fixture.nativeElement.querySelectorAll('.comment-item');
+      expect(commentItems.length).toBe(2);
+    });
+
+    it('widens the left column to full width (col-12, no col-lg-8)', () => {
+      const leftColumn: HTMLElement = fixture.nativeElement.querySelector('.row.g-4 > div');
+      expect(leftColumn).toBeTruthy();
+      expect(leftColumn.className.trim()).toBe('col-12');
+      expect(leftColumn.classList.contains('col-lg-8')).toBeFalse();
+    });
   });
 });

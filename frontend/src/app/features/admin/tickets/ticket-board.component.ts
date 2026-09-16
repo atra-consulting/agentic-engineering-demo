@@ -27,6 +27,7 @@ import {
 import { Ticket, TicketStatus, TicketSummary } from '../../../core/models/ticket.model';
 import { TicketService } from '../../../core/services/ticket.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { TicketCreateComponent } from './ticket-create.component';
 
@@ -53,9 +54,11 @@ import { TicketCreateComponent } from './ticket-create.component';
         >
           {{ recentOnly ? 'Alle' : 'Kürzlich geändert' }}
         </button>
-        <button class="btn btn-primary" (click)="openCreateModal()">
-          <fa-icon [icon]="faPlus" class="me-2" />Neues Ticket
-        </button>
+        @if (isAdmin) {
+          <button class="btn btn-primary" (click)="openCreateModal()">
+            <fa-icon [icon]="faPlus" class="me-2" />Neues Ticket
+          </button>
+        }
       </div>
     </div>
 
@@ -214,10 +217,12 @@ import { TicketCreateComponent } from './ticket-create.component';
             (cdkDropListDropped)="onDrop($event, 'DEFINITION')"
           >
             @for (ticket of viewDefinition; track ticket.id) {
-              <div class="ticket-card" cdkDrag [cdkDragData]="ticket" [cdkDragDisabled]="recentOnly">
-                <div class="ticket-drag-handle" cdkDragHandle (click)="$event.stopPropagation()">
-                  <fa-icon [icon]="faGripVertical" />
-                </div>
+              <div class="ticket-card" cdkDrag [cdkDragData]="ticket" [cdkDragDisabled]="recentOnly || !isAdmin">
+                @if (isAdmin) {
+                  <div class="ticket-drag-handle" cdkDragHandle (click)="$event.stopPropagation()">
+                    <fa-icon [icon]="faGripVertical" />
+                  </div>
+                }
                 <div class="ticket-body-click" role="button" tabindex="0" (click)="navigateToDetail(ticket.id)" (keydown.enter)="navigateToDetail(ticket.id)" (keydown.space)="$event.preventDefault(); navigateToDetail(ticket.id)">
                   <div class="ticket-number">#{{ ticket.id }}</div>
                   <div class="ticket-title">{{ ticket.title }}</div>
@@ -257,10 +262,12 @@ import { TicketCreateComponent } from './ticket-create.component';
             (cdkDropListDropped)="onDrop($event, 'TODO')"
           >
             @for (ticket of viewTodo; track ticket.id) {
-              <div class="ticket-card" cdkDrag [cdkDragData]="ticket" [cdkDragDisabled]="recentOnly">
-                <div class="ticket-drag-handle" cdkDragHandle (click)="$event.stopPropagation()">
-                  <fa-icon [icon]="faGripVertical" />
-                </div>
+              <div class="ticket-card" cdkDrag [cdkDragData]="ticket" [cdkDragDisabled]="recentOnly || !isAdmin">
+                @if (isAdmin) {
+                  <div class="ticket-drag-handle" cdkDragHandle (click)="$event.stopPropagation()">
+                    <fa-icon [icon]="faGripVertical" />
+                  </div>
+                }
                 <div class="ticket-body-click" role="button" tabindex="0" (click)="navigateToDetail(ticket.id)" (keydown.enter)="navigateToDetail(ticket.id)" (keydown.space)="$event.preventDefault(); navigateToDetail(ticket.id)">
                   <div class="ticket-number">#{{ ticket.id }}</div>
                   <div class="ticket-title">{{ ticket.title }}</div>
@@ -300,10 +307,12 @@ import { TicketCreateComponent } from './ticket-create.component';
             (cdkDropListDropped)="onDrop($event, 'IN_PROGRESS')"
           >
             @for (ticket of viewInProgress; track ticket.id) {
-              <div class="ticket-card" cdkDrag [cdkDragData]="ticket" [cdkDragDisabled]="recentOnly">
-                <div class="ticket-drag-handle" cdkDragHandle (click)="$event.stopPropagation()">
-                  <fa-icon [icon]="faGripVertical" />
-                </div>
+              <div class="ticket-card" cdkDrag [cdkDragData]="ticket" [cdkDragDisabled]="recentOnly || !isAdmin">
+                @if (isAdmin) {
+                  <div class="ticket-drag-handle" cdkDragHandle (click)="$event.stopPropagation()">
+                    <fa-icon [icon]="faGripVertical" />
+                  </div>
+                }
                 <div class="ticket-body-click" role="button" tabindex="0" (click)="navigateToDetail(ticket.id)" (keydown.enter)="navigateToDetail(ticket.id)" (keydown.space)="$event.preventDefault(); navigateToDetail(ticket.id)">
                   <div class="ticket-number">#{{ ticket.id }}</div>
                   <div class="ticket-title">{{ ticket.title }}</div>
@@ -343,10 +352,12 @@ import { TicketCreateComponent } from './ticket-create.component';
             (cdkDropListDropped)="onDrop($event, 'ON_HOLD')"
           >
             @for (ticket of viewOnHold; track ticket.id) {
-              <div class="ticket-card" cdkDrag [cdkDragData]="ticket" [cdkDragDisabled]="recentOnly">
-                <div class="ticket-drag-handle" cdkDragHandle (click)="$event.stopPropagation()">
-                  <fa-icon [icon]="faGripVertical" />
-                </div>
+              <div class="ticket-card" cdkDrag [cdkDragData]="ticket" [cdkDragDisabled]="recentOnly || !isAdmin">
+                @if (isAdmin) {
+                  <div class="ticket-drag-handle" cdkDragHandle (click)="$event.stopPropagation()">
+                    <fa-icon [icon]="faGripVertical" />
+                  </div>
+                }
                 <div class="ticket-body-click" role="button" tabindex="0" (click)="navigateToDetail(ticket.id)" (keydown.enter)="navigateToDetail(ticket.id)" (keydown.space)="$event.preventDefault(); navigateToDetail(ticket.id)">
                   <div class="ticket-number">#{{ ticket.id }}</div>
                   <div class="ticket-title">{{ ticket.title }}</div>
@@ -386,10 +397,12 @@ import { TicketCreateComponent } from './ticket-create.component';
             (cdkDropListDropped)="onDrop($event, 'DONE')"
           >
             @for (ticket of viewDone; track ticket.id) {
-              <div class="ticket-card" cdkDrag [cdkDragData]="ticket" [cdkDragDisabled]="recentOnly">
-                <div class="ticket-drag-handle" cdkDragHandle (click)="$event.stopPropagation()">
-                  <fa-icon [icon]="faGripVertical" />
-                </div>
+              <div class="ticket-card" cdkDrag [cdkDragData]="ticket" [cdkDragDisabled]="recentOnly || !isAdmin">
+                @if (isAdmin) {
+                  <div class="ticket-drag-handle" cdkDragHandle (click)="$event.stopPropagation()">
+                    <fa-icon [icon]="faGripVertical" />
+                  </div>
+                }
                 <div class="ticket-body-click" role="button" tabindex="0" (click)="navigateToDetail(ticket.id)" (keydown.enter)="navigateToDetail(ticket.id)" (keydown.space)="$event.preventDefault(); navigateToDetail(ticket.id)">
                   <div class="ticket-number">#{{ ticket.id }}</div>
                   <div class="ticket-title">{{ ticket.title }}</div>
@@ -721,6 +734,11 @@ export class TicketBoardComponent implements OnInit {
   private modalService = inject(NgbModal);
   private router = inject(Router);
   private destroyRef = inject(DestroyRef);
+  private authService = inject(AuthService);
+
+  get isAdmin(): boolean {
+    return this.authService.currentUser()?.rollen.includes('ROLE_ADMIN') ?? false;
+  }
 
   private summaryTrigger$ = new Subject<void>();
 
