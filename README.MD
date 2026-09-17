@@ -60,8 +60,8 @@ Vollständige Installationsanleitung: **[docs/SETUP.md](docs/SETUP.md)**
 Repository klonen:
 
 ```bash
-git clone https://github.com/ksilz/coding-with-ai-demo.git
-cd coding-with-ai-demo
+git clone https://github.com/atra-consulting/agentic-engineering-demo.git
+cd agentic-engineering-demo
 ```
 
 Stack starten:
@@ -402,8 +402,8 @@ Kopiere die Subagents und Skills in den `.claude`-Ordner deines Projekts.
 
 ```bash
 mkdir -p dein-projekt/.claude
-cp -r coding-with-ai-demo/.claude/agents dein-projekt/.claude/
-cp -r coding-with-ai-demo/.claude/skills dein-projekt/.claude/
+cp -r agentic-engineering-demo/.claude/agents dein-projekt/.claude/
+cp -r agentic-engineering-demo/.claude/skills dein-projekt/.claude/
 ```
 
 Tipp: Nimm nur, was du brauchst. Die Tooling-Agents (`python-*`, `shell-*`, `skill-*`) passen fast überall. Die CRM-Agents (`be-coder`, `fe-coder` …) musst du stark anpassen.
