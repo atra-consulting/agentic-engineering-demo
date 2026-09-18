@@ -113,6 +113,19 @@ function baueInitialeProzessDaten(): Record<ProzessKey, ProzessSnapshot> {
         min-width: 180px;
         min-height: 44px;
       }
+      /* Per-step role picker (REQ-108), agile processes only. A dedicated class instead
+         of Bootstrap's .w-auto — .w-auto sizes the select to its currently-selected
+         option's text ("— Keine —" vs "BA" vs "Tester"), so every row's later columns
+         drifted out of alignment. Fixed width instead, sized to comfortably fit the
+         longest option ("— Keine —"), same regardless of value. min-height matches this
+         row's other new controls (.step-name-input, .step-remove-btn) at the 44px
+         touch-target floor — the existing unit <select> (.form-select.w-auto, further
+         right in the same row) stays untouched; that height is out of scope for this PR. */
+      .step-role-select {
+        flex: 0 0 auto;
+        width: 150px;
+        min-height: 44px;
+      }
       .step-remove-btn,
       .step-add-btn {
         min-height: 44px;
@@ -138,12 +151,25 @@ function baueInitialeProzessDaten(): Record<ProzessKey, ProzessSnapshot> {
       }
       /* Blocked-state control (REQ-106): the real HTML disabled attribute is never used here —
          the control must stay keyboard-focusable when blocked, so it carries
-         aria-disabled="true" instead. Muted look + not-allowed cursor, visually consistent
-         with .step-limit-reason above; the focus ring stays exactly as visible as on an
-         active control. */
+         aria-disabled="true" instead. Muted via color/border-color, NOT opacity — opacity
+         dims the whole rendered element, including its own :focus-visible outline, down to
+         roughly 2.5:1 against white, under the WCAG 1.4.11 3:1 non-text-contrast floor.
+         Each muted color below is the same 50/50 blend against white that opacity: 0.5 used
+         to produce, applied to color/border-color only so the outline stays untouched and at
+         full strength — #264892 on white is ~8.7:1, comfortably above the 3:1 floor. Visually
+         consistent with .step-limit-reason above; not-allowed cursor kept as-is. */
       .btn[aria-disabled='true'] {
-        opacity: 0.5;
         cursor: not-allowed;
+      }
+      .btn-outline-primary[aria-disabled='true'] {
+        color: #93a4c9;
+        border-color: #93a4c9;
+        background-color: transparent;
+      }
+      .btn-outline-danger[aria-disabled='true'] {
+        color: #eea18f;
+        border-color: #eea18f;
+        background-color: transparent;
       }
       .btn[aria-disabled='true']:focus-visible {
         outline: 3px solid #264892;
@@ -1115,10 +1141,20 @@ export class RechnerComponent implements OnInit {
     return this.liveRegionSignal()[prozessKey] ?? '';
   }
 
+  /**
+   * Singular/plural German word for a step count. Shared by announce() below AND the two
+   * live-step-count template read sites (the Balken bar's <desc>, the Flussdiagramm's
+   * aria-label) — both used to hardcode the plural, which read wrong at a count of 1
+   * ("1 Schritten"/"1 Schritte"). Public, not private: the template calls it directly.
+   */
+  schritteWort(count: number): string {
+    return count === 1 ? 'Schritt' : 'Schritte';
+  }
+
   /** Sets the polite live-region announcement, stating the action and the NEW count. */
   private announce(prozessKey: ProzessKey, action: 'hinzugefügt' | 'entfernt'): void {
     const count = this.getLiveStepCount(prozessKey);
-    const text = `Schritt ${action}, jetzt ${count} ${count === 1 ? 'Schritt' : 'Schritte'}`;
+    const text = `Schritt ${action}, jetzt ${count} ${this.schritteWort(count)}`;
     this.liveRegionSignal.update((cur) => ({ ...cur, [prozessKey]: text }));
   }
 

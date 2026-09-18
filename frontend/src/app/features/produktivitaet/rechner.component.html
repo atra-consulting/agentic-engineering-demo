@@ -37,7 +37,8 @@
       <!-- Live step count, not the descriptor's initial stepCount — steps can be added/removed. -->
       <desc [id]="'bar-desc-' + ns">
         Prozessbalken für {{ prozesse[prozessIdx].titel }} mit
-        {{ getLiveStepCount(prozesse[prozessIdx].key) }} Schritten. Gesamtdauer:
+        {{ getLiveStepCount(prozesse[prozessIdx].key) }}
+        {{ schritteWort(getLiveStepCount(prozesse[prozessIdx].key)) }}. Gesamtdauer:
         {{ getProzessTotal(prozessIdx) | dauer }}.
       </desc>
 
@@ -342,7 +343,7 @@
               <div
                 class="flow-scroll"
                 role="group"
-                [attr.aria-label]="'Ablaufdiagramm ' + p.titel + ', ' + getLiveStepCount(p.key) + ' Schritte'"
+                [attr.aria-label]="'Ablaufdiagramm ' + p.titel + ', ' + getLiveStepCount(p.key) + ' ' + schritteWort(getLiveStepCount(p.key))"
               >
                 <div class="flow-track">
                   @for (schritt of getFlowchartSchritte($index); track schritt.nr) {
@@ -432,13 +433,14 @@
                         [formControl]="getNameCtrl(ctrl)"
                         maxlength="200"
                         [attr.aria-label]="'Name für Schritt ' + ($index + 1)"
+                        [title]="getStepName(p.key, $index)"
                       />
                       <!-- Per-step role picker (REQ-108), agile processes only. Plain component
                            state, not a FormControl — reads/writes the live array getRollen()
                            already returns, same direct-mutation pattern as addStep/removeStep. -->
                       @if (showsRollen(p.key)) {
                         <select
-                          class="form-select w-auto"
+                          class="form-select step-role-select"
                           [value]="getStepRole(p.key, $index) ?? ''"
                           (change)="setStepRole(p.key, $index, $any($event.target).value)"
                           [attr.aria-label]="'Rolle für Schritt ' + ($index + 1)"
