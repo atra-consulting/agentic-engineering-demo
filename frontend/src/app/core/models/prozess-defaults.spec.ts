@@ -105,7 +105,7 @@ describe('PROZESSE — R1 order, titles, step counts', () => {
     ]);
   });
 
-  it('has step counts 19/19/11/2 in R1 order', () => {
+  it('has default (initial) step counts 19/19/11/2 in R1 order — the count each process STARTS with; the live count can grow or shrink once a user adds/removes steps (CALCULATOR-SELECTABLE-STEPS)', () => {
     expect(PROZESSE.map((p) => p.stepCount)).toEqual([19, 19, 11, 2]);
   });
 
