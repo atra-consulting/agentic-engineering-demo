@@ -198,9 +198,21 @@ function baueInitialeProzessDaten(): Record<ProzessKey, ProzessSnapshot> {
         height: 32px;
         overflow: hidden;
       }
+      /* CSS outline doesn't work here: .process-svg's rects fill the full 32-unit
+         viewBox height, so an outline's outline-offset has no room to render outside
+         the shape before the SVG's own viewport clips it (overflow: hidden above is
+         load-bearing for other layout reasons and stays). An inset stroke on the
+         rect itself draws within its own bounds instead, so it survives the clip —
+         stroke-width is in viewBox units (not CSS px); 2 stays visible without
+         visually swallowing the narrowest 3-unit-wide 0-minute floor markers. White,
+         not the usual #264892 focus-ring blue: only work rects (fill="#264892",
+         the only ones with tabindex) ever receive this — an inset navy stroke on a
+         navy fill has ~1:1 contrast and is invisible (verified live), so white is
+         used instead (~8.7:1 against the navy fill). */
       .seg-rect:focus-visible {
-        outline: 3px solid #264892;
-        outline-offset: 2px;
+        stroke: #fff;
+        stroke-width: 2;
+        outline: none;
       }
       .seg-rect {
         cursor: pointer;
@@ -1106,7 +1118,7 @@ export class RechnerComponent implements OnInit {
   /** Sets the polite live-region announcement, stating the action and the NEW count. */
   private announce(prozessKey: ProzessKey, action: 'hinzugefügt' | 'entfernt'): void {
     const count = this.getLiveStepCount(prozessKey);
-    const text = `Schritt ${action}, jetzt ${count} Schritte`;
+    const text = `Schritt ${action}, jetzt ${count} ${count === 1 ? 'Schritt' : 'Schritte'}`;
     this.liveRegionSignal.update((cur) => ({ ...cur, [prozessKey]: text }));
   }
 

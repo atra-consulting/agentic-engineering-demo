@@ -475,12 +475,13 @@
                         class="btn btn-outline-danger step-remove-btn"
                         [attr.aria-label]="'Schritt ' + ($index + 1) + ' entfernen'"
                         [attr.aria-disabled]="isRemoveBlocked(p.key) ? 'true' : null"
+                        [attr.aria-describedby]="isRemoveBlocked(p.key) ? p.key + '-remove-blocked-' + $index : null"
                         (click)="removeStep(p.key, $index)"
                       >
                         Entfernen
                       </button>
                       @if (isRemoveBlocked(p.key)) {
-                        <span class="step-limit-reason">Mindestens 1 Schritt erforderlich.</span>
+                        <span [id]="p.key + '-remove-blocked-' + $index" class="step-limit-reason">Mindestens 1 Schritt erforderlich.</span>
                       }
                       @if (getValueCtrl(ctrl).invalid && getValueCtrl(ctrl).touched) {
                         <div [id]="p.key + '-work-err-' + $index" class="text-danger small">
@@ -535,12 +536,13 @@
                     class="btn btn-outline-primary step-add-btn"
                     [attr.aria-label]="'Schritt hinzufügen zu ' + p.titel"
                     [attr.aria-disabled]="isAddBlocked(p.key) ? 'true' : null"
+                    [attr.aria-describedby]="isAddBlocked(p.key) ? p.key + '-add-blocked' : null"
                     (click)="addStep(p.key)"
                   >
                     Schritt hinzufügen
                   </button>
                   @if (isAddBlocked(p.key)) {
-                    <span class="step-limit-reason">Maximal 50 Schritte erreicht.</span>
+                    <span [id]="p.key + '-add-blocked'" class="step-limit-reason">Maximal 50 Schritte erreicht.</span>
                   }
                 </div>
               </div>
