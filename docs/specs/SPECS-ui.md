@@ -194,7 +194,7 @@ Usage contracts (which service to inject, how to call) are in `SPECS-frontend.md
 
 For a control that must stay focusable while blocked — for example the "Schritt hinzufügen" button at the step cap, or "Entfernen" at the step floor in the Rechner feature — use `[attr.aria-disabled]="condition ? 'true' : null"`, not the native `disabled` attribute. The native attribute removes a control from the tab order; `aria-disabled` keeps it reachable while marking it unavailable to assistive technology.
 
-Visual treatment: muted color or reduced opacity, plus `cursor: not-allowed`. The focus ring must stay clearly visible when the control is blocked. Pair the control with a persistently visible reason text next to it — never a tooltip, never hover-only.
+Visual treatment: muted color — never opacity, since dimming the whole element also dims its own focus ring below the WCAG 1.4.11 3:1 floor — plus `cursor: not-allowed`. Pair the control with a persistently visible reason text next to it — never a tooltip, never hover-only.
 
 Do not use `.text-muted` / `$secondary` for that reason text — see the contrast note under Design Tokens.
 
@@ -206,7 +206,7 @@ First used by the Rechner feature's step add/remove controls (`docs/specs/SPECS-
 
 For a status update after a user action — for example the step count change after "Schritt hinzufügen" or "Entfernen" in the Rechner feature — use a visually-hidden `aria-live="polite"` span with `aria-atomic="true"`, one per process. Update its text after the action; never move focus into it, so it only announces, it never steals focus.
 
-First used by the Rechner feature's step add/remove controls (`docs/specs/SPECS-frontend.md` → Produktivität → Rechner) — the only use of `aria-live` in this codebase.
+First used by the Rechner feature's step add/remove controls (`docs/specs/SPECS-frontend.md` → Produktivität → Rechner) — the first purpose-built `aria-live` region for announcing a user action's result in this codebase.
 
 ---
 
