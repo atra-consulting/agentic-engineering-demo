@@ -202,6 +202,14 @@ First used by the Rechner feature's step add/remove controls (`docs/specs/SPECS-
 
 ---
 
+## Live-Region Announcement Pattern (`aria-live`)
+
+For a status update after a user action — for example the step count change after "Schritt hinzufügen" or "Entfernen" in the Rechner feature — use a visually-hidden `aria-live="polite"` span with `aria-atomic="true"`, one per process. Update its text after the action; never move focus into it, so it only announces, it never steals focus.
+
+First used by the Rechner feature's step add/remove controls (`docs/specs/SPECS-frontend.md` → Produktivität → Rechner) — the only use of `aria-live` in this codebase.
+
+---
+
 ## Phase Badge Color Map
 
 Canonical home. Cross-referenced from the Chance Board section in `SPECS-frontend.md`.
