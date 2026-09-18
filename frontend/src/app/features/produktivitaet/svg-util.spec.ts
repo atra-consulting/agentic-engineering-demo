@@ -45,19 +45,73 @@ describe('computeSegments', () => {
       expect(totalWidth).toBeCloseTo(WIDTH, 5);
     });
 
-    it('widths are proportional to each segment share of process total', () => {
-      const works = [100, 0];
-      const waits = [100];
-      // total = 200; work[0]=100→50%, wait[0]=100→50%, work[1]=0→0%
+    it('widths are proportional to each segment share of process total (no zero segments)', () => {
+      const works = [100, 50];
+      const waits = [50];
+      // total = 200; work[0]=100→50%, wait[0]=50→25%, work[1]=50→25%
       const segs = computeSegments(works, waits, WIDTH);
       expect(segs[0].width).toBeCloseTo(50, 5);
-      expect(segs[1].width).toBeCloseTo(50, 5);
-      expect(segs[2].width).toBeCloseTo(0, 5);
+      expect(segs[1].width).toBeCloseTo(25, 5);
+      expect(segs[2].width).toBeCloseTo(25, 5);
     });
 
-    it('all segment widths are 0 when process total is 0', () => {
+    it('falls back to equal-width work segments when process total is 0, with waits at 0 width', () => {
       const segs = computeSegments([0, 0], [0], WIDTH);
-      segs.forEach((s) => expect(s.width).toBe(0));
+      const workSegs = segs.filter((s) => s.type === 'work');
+      const waitSegs = segs.filter((s) => s.type === 'wait');
+      workSegs.forEach((s) => expect(s.width).toBeCloseTo(WIDTH / 2, 5));
+      waitSegs.forEach((s) => expect(s.width).toBe(0));
+    });
+  });
+
+  describe('0-minute work segment floor (REQ-104)', () => {
+    it('gives a 0-minute work segment the 3-unit floor out of a 600-unit bar', () => {
+      const segs = computeSegments([0, 100], [0], 600);
+      const workSegs = segs.filter((s) => s.type === 'work');
+      expect(workSegs[0].width).toBeCloseTo(3, 5);
+    });
+
+    it('keeps a 0-minute wait segment at 0 width even when total > 0 and a work floor applies', () => {
+      const segs = computeSegments([0, 100], [0], 600);
+      const waitSegs = segs.filter((s) => s.type === 'wait');
+      expect(waitSegs[0].width).toBe(0);
+    });
+
+    it('non-zero segments keep correct relative proportions to each other alongside a floored segment', () => {
+      const works = [100, 0, 50];
+      const waits = [0, 0];
+      const segs = computeSegments(works, waits, WIDTH);
+      const workSegs = segs.filter((s) => s.type === 'work');
+      // work[0]=100 and work[2]=50 carried a 2:1 ratio before flooring; they must still.
+      expect(workSegs[0].width / workSegs[2].width).toBeCloseTo(2, 5);
+    });
+
+    it('reserve for all 0-minute work floors sums to exactly 150 units at the 50-step cap (600-unit bar)', () => {
+      const works = new Array(50).fill(0);
+      const waits = new Array(49).fill(0);
+      waits[0] = 100; // keep total > 0 so the floor path (not the zero-total fallback) runs
+      const segs = computeSegments(works, waits, 600);
+      const workWidthSum = segs.filter((s) => s.type === 'work').reduce((sum, s) => sum + s.width, 0);
+      expect(workWidthSum).toBeCloseTo(150, 5);
+      segs
+        .filter((s) => s.type === 'work')
+        .forEach((s) => {
+          expect(s.width).toBeCloseTo(3, 5);
+          expect(s.width).toBeGreaterThan(0);
+        });
+    });
+
+    it('shrinks each floored segment proportionally when the naive floor total would exceed the 150-unit cap', () => {
+      const works = new Array(60).fill(0);
+      const waits = new Array(59).fill(0);
+      waits[0] = 100; // total > 0
+      const segs = computeSegments(works, waits, 600);
+      const workSegs = segs.filter((s) => s.type === 'work');
+      const workWidthSum = workSegs.reduce((sum, s) => sum + s.width, 0);
+      // naive floor would be 60 * 3 = 180, over the 150-unit cap, so each floored
+      // segment shrinks to 150 / 60 = 2.5.
+      expect(workWidthSum).toBeCloseTo(150, 5);
+      workSegs.forEach((s) => expect(s.width).toBeCloseTo(2.5, 5));
     });
   });
 

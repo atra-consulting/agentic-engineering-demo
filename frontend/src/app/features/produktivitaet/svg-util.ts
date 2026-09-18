@@ -10,11 +10,37 @@ export interface ComparisonBar {
 }
 
 /**
+ * Minimum width reserved for a 0-minute work segment, expressed as a ratio of the
+ * caller's `width` (so it lands exactly on 3 units for the real 600-unit viewBox,
+ * per REQ-104, but still scales sensibly for any width passed in tests).
+ */
+const WORK_ZERO_FLOOR_RATIO = 3 / 600;
+
+/**
+ * Cap on the total width reserved for 0-minute work floors, expressed as a ratio of
+ * `width` (lands on 150 units — a quarter of the real 600-unit viewBox). At the
+ * REQ-106 cap of 50 steps, 50 floors of 3 units land exactly on this cap, so it only
+ * ever bites if the step cap changes later.
+ */
+const MAX_FLOOR_RESERVE_RATIO = 150 / 600;
+
+/**
  * Computes SVG segments for a single process bar.
  * Ordering: work(0), wait(0), work(1), wait(1), ..., work(N-1).
  * N work segments + N-1 wait segments. First and last are always work.
- * Widths are proportional to each segment's share of the process total.
- * If total is 0, all segments get zero width.
+ *
+ * Widths are proportional to each segment's share of the process total, with two
+ * exceptions so a step is never invisible (REQ-104):
+ * - A 0-minute work segment gets a minimum floor width (see `WORK_ZERO_FLOOR_RATIO`).
+ *   The remaining width is then distributed proportionally among the segments that
+ *   carry real minutes, so their widths keep the correct relative proportions to each
+ *   other. The total floor reserve is capped (see `MAX_FLOOR_RESERVE_RATIO`); if the
+ *   naive floor total would exceed the cap, every floored segment shrinks
+ *   proportionally so the reserve sums to exactly the cap. 0-minute wait segments are
+ *   never floored — a wait is not a step and needs no marker.
+ * - When the process total is exactly 0 (every work and every wait at 0 minutes),
+ *   proportional math has nothing to divide by. Falls back to equal-width work
+ *   segments filling the whole bar, with every wait segment at 0 width.
  */
 export function computeSegments(
   works: number[],
@@ -22,18 +48,53 @@ export function computeSegments(
   width: number,
 ): SvgSegment[] {
   const total = works.reduce((s, v) => s + v, 0) + waits.reduce((s, v) => s + v, 0);
+
+  if (total === 0) {
+    return computeZeroTotalFallbackSegments(works, waits, width);
+  }
+
+  const zeroWorkCount = works.filter((w) => w === 0).length;
+  const naiveReserve = zeroWorkCount * (width * WORK_ZERO_FLOOR_RATIO);
+  const maxReserve = width * MAX_FLOOR_RESERVE_RATIO;
+  const reserve = Math.min(naiveReserve, maxReserve);
+  const floorPerZeroSegment = zeroWorkCount > 0 ? reserve / zeroWorkCount : 0;
+  const remainingWidth = width - reserve;
+
   const segments: SvgSegment[] = [];
   let x = 0;
 
   for (let i = 0; i < works.length; i++) {
-    const segWidth = total > 0 ? (works[i] / total) * width : 0;
+    const segWidth = works[i] > 0 ? (works[i] / total) * remainingWidth : floorPerZeroSegment;
     segments.push({ x, width: segWidth, type: 'work', index: i });
     x += segWidth;
 
     if (i < waits.length) {
-      const waitWidth = total > 0 ? (waits[i] / total) * width : 0;
+      const waitWidth = waits[i] > 0 ? (waits[i] / total) * remainingWidth : 0;
       segments.push({ x, width: waitWidth, type: 'wait', index: i });
       x += waitWidth;
+    }
+  }
+
+  return segments;
+}
+
+/**
+ * Degenerate-total fallback (every work and every wait at 0 minutes): there is
+ * nothing to distribute proportionally, so every work segment gets an equal share of
+ * the whole bar and every wait segment stays at 0 width. Keeps the bar visible and
+ * every step focusable instead of collapsing to nothing.
+ */
+function computeZeroTotalFallbackSegments(works: number[], waits: number[], width: number): SvgSegment[] {
+  const segWidth = works.length > 0 ? width / works.length : 0;
+  const segments: SvgSegment[] = [];
+  let x = 0;
+
+  for (let i = 0; i < works.length; i++) {
+    segments.push({ x, width: segWidth, type: 'work', index: i });
+    x += segWidth;
+
+    if (i < waits.length) {
+      segments.push({ x, width: 0, type: 'wait', index: i });
     }
   }
 
