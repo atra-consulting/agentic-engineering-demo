@@ -19,6 +19,8 @@ Defined in `frontend/src/_variables.scss` and imported globally.
 
 Bootstrap 5.3.8 is loaded after these variables so that Bootstrap utilities inherit the overrides. The load order is defined in the `styles` array of `frontend/angular.json`: first `src/_variables.scss`, then `node_modules/bootstrap/scss/bootstrap.scss`, then `src/styles.scss`. `styles.scss` also contains a redundant `@import 'variables'` at its top, which is harmless because the Angular build processes the `styles` array entries first. Custom SCSS is layered on top ("Bootstrap-first" convention: use Bootstrap utilities first, reach for custom rules only when Bootstrap cannot do it). Dark mode is not supported.
 
+**Contrast note:** `$secondary` (`#777777`) measures roughly 4.48:1 on white — just under the 4.5:1 WCAG AA threshold for text contrast. Do not use it, or the `.text-muted` class, for body text that must clear that bar. Use `#495057` instead (roughly 8.2:1), already used by `.bar-total`, `.pie-note` and `.cmp-col-header` in the Rechner feature (`docs/specs/SPECS-frontend.md` → Produktivität → Rechner).
+
 ---
 
 ## AG Grid Theming
@@ -185,6 +187,26 @@ Usage contracts (which service to inject, how to call) are in `SPECS-frontend.md
 ### EurCurrencyPipe
 
 - Formats numbers as EUR in `de-DE` locale, 2 decimal places (e.g. `1.234,56 €`).
+
+---
+
+## Blocked-State Control Pattern (`aria-disabled`)
+
+For a control that must stay focusable while blocked — for example the "Schritt hinzufügen" button at the step cap, or "Entfernen" at the step floor in the Rechner feature — use `[attr.aria-disabled]="condition ? 'true' : null"`, not the native `disabled` attribute. The native attribute removes a control from the tab order; `aria-disabled` keeps it reachable while marking it unavailable to assistive technology.
+
+Visual treatment: muted color — never opacity, since dimming the whole element also dims its own focus ring below the WCAG 1.4.11 3:1 floor — plus `cursor: not-allowed`. Pair the control with a persistently visible reason text next to it — never a tooltip, never hover-only.
+
+Do not use `.text-muted` / `$secondary` for that reason text — see the contrast note under Design Tokens.
+
+First used by the Rechner feature's step add/remove controls (`docs/specs/SPECS-frontend.md` → Produktivität → Rechner).
+
+---
+
+## Live-Region Announcement Pattern (`aria-live`)
+
+For a status update after a user action — for example the step count change after "Schritt hinzufügen" or "Entfernen" in the Rechner feature — use a visually-hidden `aria-live="polite"` span with `aria-atomic="true"`, one per process. Update its text after the action; never move focus into it, so it only announces, it never steals focus.
+
+First used by the Rechner feature's step add/remove controls (`docs/specs/SPECS-frontend.md` → Produktivität → Rechner) — the first purpose-built `aria-live` region for announcing a user action's result in this codebase.
 
 ---
 

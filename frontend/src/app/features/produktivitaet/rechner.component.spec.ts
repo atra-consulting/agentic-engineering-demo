@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { FormGroup } from '@angular/forms';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient } from '@angular/common/http';
@@ -12,6 +12,7 @@ import {
   DEFAULT_DURATIONS,
   PROZESS_ANNAHMEN,
   PROZESS_CAPTION,
+  PROZESS_ROLLEN,
   PROZESS_STEP_LABELS,
   PROZESSE,
   ProzessKey,
@@ -87,6 +88,22 @@ function makeFullSzenario(overrides: Partial<Szenario> = {}): Szenario {
 function stepControls(component: RechnerComponent, key: ProzessKey, index: number) {
   const ctrl = component.getWorksArray(key).at(index) as FormGroup;
   return { value: component.getValueCtrl(ctrl), unit: component.getUnitCtrl(ctrl) };
+}
+
+/**
+ * Reaches into the component's private unit-conversion bookkeeping (`einheitSubscriptions`,
+ * `letzteEinheit`) so teardown-on-removal specs can assert a removed step's subscription is
+ * actually unsubscribed and both map entries are actually deleted — see Technical Note 7 /
+ * PLAN Group 4. Cast via `unknown`, never `any`.
+ */
+function unitConversionMaps(component: RechnerComponent): {
+  einheitSubscriptions: Map<unknown, { closed: boolean }>;
+  letzteEinheit: Map<unknown, unknown>;
+} {
+  return component as unknown as {
+    einheitSubscriptions: Map<unknown, { closed: boolean }>;
+    letzteEinheit: Map<unknown, unknown>;
+  };
 }
 
 // ─── Shared TestBed setup ───────────────────────────────────────────────────
@@ -340,18 +357,22 @@ describe('RechnerComponent', () => {
   // ─── Scenario-load fallback for mismatched/missing process data ──────────
 
   describe('ladeScenario() falls back to defaults on mismatched process data', () => {
-    it('does not throw when a process array has the wrong length', () => {
+    // Under the NEW structural rule (REQ-301/REQ-106), validity is `waits.length ===
+    // works.length - 1`, not a fixed per-process count. 5 works needs exactly 4 waits;
+    // this fixture supplies only 3, so it stays genuinely invalid (mismatched wait
+    // count) even though the OLD fixed-length rule is gone.
+    it('does not throw when a process has a mismatched wait count', () => {
       const szenario = makeFullSzenario({
-        // halbautomatisch expects 11 works — this one has only 5 (wrong length)
-        semiAutomatedSteps: { works: [0, 5, 15, 15, 10], waits: [5, 60, 60, 5] },
+        // halbautomatisch: 5 works needs 4 waits — this one has only 3 (mismatched).
+        semiAutomatedSteps: { works: [0, 5, 15, 15, 10], waits: [5, 60, 60] },
       });
 
       expect(() => component.ladeScenario(szenario)).not.toThrow();
     });
 
-    it('falls back to DEFAULT_DURATIONS for the process whose works array has the wrong length', () => {
+    it('falls back to DEFAULT_DURATIONS for the process with a mismatched wait count', () => {
       const szenario = makeFullSzenario({
-        semiAutomatedSteps: { works: [0, 5, 15, 15, 10], waits: [5, 60, 60, 5] },
+        semiAutomatedSteps: { works: [0, 5, 15, 15, 10], waits: [5, 60, 60] },
       });
 
       component.ladeScenario(szenario);
@@ -363,12 +384,12 @@ describe('RechnerComponent', () => {
 
     it('still patches correctly-shaped processes from the stored (non-default) data', () => {
       const szenario = makeFullSzenario({
-        semiAutomatedSteps: { works: [0, 5, 15, 15, 10], waits: [5, 60, 60, 5] }, // wrong length
+        semiAutomatedSteps: { works: [0, 5, 15, 15, 10], waits: [5, 60, 60] }, // mismatched
       });
 
       component.ladeScenario(szenario);
 
-      // menschlich (19/18, correct length) must be patched from the stored data, not fall back.
+      // menschlich (19/18, structurally valid) must be patched from the stored data, not fall back.
       const worksArray = component.getWorksArray('menschlich');
       const firstValue = component.getValueCtrl(worksArray.at(0) as FormGroup).value;
       expect(firstValue).toBe(100); // fill value used by makeFullSzenario's humanSteps
@@ -384,6 +405,44 @@ describe('RechnerComponent', () => {
       const worksArray = component.getWorksArray('vollautomatisch');
       const values = worksArray.controls.map((c) => component.getValueCtrl(c as FormGroup).value);
       expect(values).toEqual(DEFAULT_DURATIONS.vollautomatisch.works);
+    });
+
+    it('falls back to DEFAULT_DURATIONS when a process has 0 works (below the REQ-106 floor)', () => {
+      const szenario = makeFullSzenario({
+        semiAutomatedSteps: { works: [], waits: [] },
+      });
+
+      expect(() => component.ladeScenario(szenario)).not.toThrow();
+
+      const worksArray = component.getWorksArray('halbautomatisch');
+      const values = worksArray.controls.map((c) => component.getValueCtrl(c as FormGroup).value);
+      expect(values).toEqual(DEFAULT_DURATIONS.halbautomatisch.works);
+    });
+
+    it('falls back to DEFAULT_DURATIONS when a process is over the 50-step cap (51 works)', () => {
+      const works = new Array(51).fill(1);
+      const waits = new Array(50).fill(1);
+      const szenario = makeFullSzenario({ agileKiSteps: { works, waits } });
+
+      expect(() => component.ladeScenario(szenario)).not.toThrow();
+
+      const worksArray = component.getWorksArray('agileKi');
+      const values = worksArray.controls.map((c) => component.getValueCtrl(c as FormGroup).value);
+      expect(values).toEqual(DEFAULT_DURATIONS.agileKi.works);
+    });
+
+    it('falls back to defaults for one bad process only — the other three still load from valid data in the same scenario', () => {
+      const szenario = makeFullSzenario({
+        semiAutomatedSteps: { works: [], waits: [] }, // invalid: 0 works
+      });
+
+      component.ladeScenario(szenario);
+
+      // menschlich, agileKi, vollautomatisch all carry valid (non-default) data in
+      // makeFullSzenario() and must still load from it, unaffected by the one bad process.
+      expect(component.getValueCtrl(component.getWorksArray('menschlich').at(0) as FormGroup).value).toBe(100);
+      expect(component.getValueCtrl(component.getWorksArray('agileKi').at(0) as FormGroup).value).toBe(10);
+      expect(component.getValueCtrl(component.getWorksArray('vollautomatisch').at(0) as FormGroup).value).toBe(30);
     });
   });
 
@@ -808,6 +867,615 @@ describe('RechnerComponent', () => {
       const sum = DEFAULT_DURATIONS.vollautomatisch.works.reduce((s, v) => s + v, 0);
 
       expect(sum).toBe(60);
+    });
+  });
+
+  // ─── Add step (REQ-101) ────────────────────────────────────────────────────
+  //
+  // Note: totals and derived chart data (getProzessTotal, getWorkWaitTotals,
+  // getRollenSplit, getSegments, getFlowchartSchritte…) read the debounced
+  // prozessDaten snapshot, refreshed only by berechne() — on init, on the 150ms-
+  // debounced form.valueChanges, or explicitly inside ladeScenario(). addStep()/
+  // removeStep() push/removeAt with the default emitEvent:true, so any assertion
+  // on one of those derived readers needs fakeAsync + tick(150) to let the
+  // debounce fire (PRD Technical Note 15). Raw FormControl/array reads
+  // (getValueCtrl, getNameCtrl, getWorksArray().length, getRollen()) are NOT
+  // debounced and need no tick.
+
+  describe('addStep() (REQ-101)', () => {
+    it('raises step count and wait count by one; the new work and wait both start at 0; the process total is unchanged', fakeAsync(() => {
+      const stepCountBefore = component.getLiveStepCount('menschlich');
+      const waitCountBefore = component.getWaitsArray('menschlich').length;
+      const totalBefore = component.getProzessTotal(0);
+
+      component.addStep('menschlich');
+      tick(150);
+
+      expect(component.getLiveStepCount('menschlich')).toBe(stepCountBefore + 1);
+      expect(component.getWaitsArray('menschlich').length).toBe(waitCountBefore + 1);
+      expect(component.getProzessTotal(0)).toBe(totalBefore);
+
+      const worksArray = component.getWorksArray('menschlich');
+      const waitsArray = component.getWaitsArray('menschlich');
+      expect(component.getValueCtrl(worksArray.at(worksArray.length - 1) as FormGroup).value).toBe(0);
+      expect(component.getValueCtrl(waitsArray.at(waitsArray.length - 1) as FormGroup).value).toBe(0);
+    }));
+
+    it("the new step's default name is \"Neuer Schritt\"", () => {
+      component.addStep('halbautomatisch');
+
+      const idx = component.getWorksArray('halbautomatisch').length - 1;
+      expect(component.getStepName('halbautomatisch', idx)).toBe('Neuer Schritt');
+    });
+
+    it('adding a step on one agile process leaves the other agile process\'s count and names untouched', () => {
+      const agileKiCountBefore = component.getLiveStepCount('agileKi');
+      const agileKiNamesBefore = component
+        .getWorksArray('agileKi')
+        .controls.map((c) => component.getNameCtrl(c as FormGroup).value);
+
+      component.addStep('menschlich');
+
+      expect(component.getLiveStepCount('agileKi')).toBe(agileKiCountBefore);
+      const agileKiNamesAfter = component
+        .getWorksArray('agileKi')
+        .controls.map((c) => component.getNameCtrl(c as FormGroup).value);
+      expect(agileKiNamesAfter).toEqual(agileKiNamesBefore);
+    });
+
+    it("a newly added agile step's work minutes appear in the work-vs-wait pie (Pie A) but are excluded from the role pie (Pie B); the note names the excluded amount", fakeAsync(() => {
+      const workBefore = component.getWorkWaitTotals(0).work; // menschlich
+      const splitBefore = component.getRollenSplit(0)!;
+
+      component.addStep('menschlich');
+      const idx = component.getWorksArray('menschlich').length - 1;
+      component.getValueCtrl(component.getWorksArray('menschlich').at(idx) as FormGroup).setValue(30);
+      tick(150);
+
+      expect(component.getWorkWaitTotals(0).work).toBe(workBefore + 30);
+      // The new step carries no role, so Pie B's totals are untouched.
+      expect(component.getRollenSplit(0)).toEqual(splitBefore);
+      // minutenZuDauer(30) renders as "30m" (see dauer.pipe.ts), not the PRD's illustrative "30 Min.".
+      expect(component.getRollenPieNote(0)).toContain('Ohne Rolle: 30m.');
+    }));
+  });
+
+  // ─── Role parity on add/remove (REQ-105, REQ-107) ─────────────────────────
+
+  describe('role array parity with the works array (REQ-105, REQ-107)', () => {
+    it('addStep() on agileKi appends an empty role, keeping the role array exactly as long as the works array; removing that step shrinks it back in lockstep', () => {
+      const before = component.getRollen('agileKi').length;
+
+      component.addStep('agileKi');
+
+      expect(component.getRollen('agileKi').length).toBe(before + 1);
+      expect(component.getRollen('agileKi').length).toBe(component.getWorksArray('agileKi').length);
+      const newIdx = component.getWorksArray('agileKi').length - 1;
+      expect(component.getStepRole('agileKi', newIdx)).toBeNull();
+
+      component.removeStep('agileKi', newIdx);
+
+      expect(component.getRollen('agileKi').length).toBe(before);
+      expect(component.getRollen('agileKi').length).toBe(component.getWorksArray('agileKi').length);
+    });
+
+    it('removing a step on menschlich drops exactly that step\'s role — step 13 ("Tester testet …") still reports Tester after step 3 above it is removed', () => {
+      const labelIndex = PROZESS_STEP_LABELS.menschlich.findIndex((l) => l.startsWith('Tester testet'));
+      expect(labelIndex).toBe(12); // sanity: step 13, 0-indexed 12
+      expect(component.getStepRole('menschlich', labelIndex)).toBe('Tester');
+
+      component.removeStep('menschlich', 2); // remove step 3 (0-indexed index 2)
+
+      const shiftedIndex = labelIndex - 1; // everything after index 2 shifts down by one
+      expect(component.getStepRole('menschlich', shiftedIndex)).toBe('Tester');
+    });
+  });
+
+  // ─── Remove step (REQ-102) — worked A/B/C/D example, values not just lengths ─
+
+  describe('removeStep() (REQ-102) — worked example on concrete values', () => {
+    /** Builds a 4-step A/B/C/D chain on vollautomatisch with waits after-A=10, after-B=20, after-C=30. */
+    function buildAbcdChain(): void {
+      component.addStep('vollautomatisch'); // 2 -> 3
+      component.addStep('vollautomatisch'); // 3 -> 4
+
+      const works = component.getWorksArray('vollautomatisch');
+      const waits = component.getWaitsArray('vollautomatisch');
+      ['A', 'B', 'C', 'D'].forEach((name, i) => {
+        component.getNameCtrl(works.at(i) as FormGroup).setValue(name);
+      });
+      [10, 20, 30].forEach((min, i) => {
+        component.getValueCtrl(waits.at(i) as FormGroup).setValue(min);
+      });
+    }
+
+    it('removing a middle step (B) drops the wait AFTER it; the wait before it survives', () => {
+      buildAbcdChain();
+
+      component.removeStep('vollautomatisch', 1); // remove B
+
+      const namesAfter = component
+        .getWorksArray('vollautomatisch')
+        .controls.map((c) => component.getNameCtrl(c as FormGroup).value);
+      expect(namesAfter).toEqual(['A', 'C', 'D']);
+
+      const waitValuesAfter = component
+        .getWaitsArray('vollautomatisch')
+        .controls.map((c) => component.getValueCtrl(c as FormGroup).value);
+      // after-A (10) survives and now sits between A and C; after-B (20) is dropped; after-C (30) remains.
+      expect(waitValuesAfter).toEqual([10, 30]);
+    });
+
+    it('removing the last step (D) drops the wait BEFORE it', () => {
+      buildAbcdChain();
+
+      component.removeStep('vollautomatisch', 3); // remove D (the last step)
+
+      const namesAfter = component
+        .getWorksArray('vollautomatisch')
+        .controls.map((c) => component.getNameCtrl(c as FormGroup).value);
+      expect(namesAfter).toEqual(['A', 'B', 'C']);
+
+      const waitValuesAfter = component
+        .getWaitsArray('vollautomatisch')
+        .controls.map((c) => component.getValueCtrl(c as FormGroup).value);
+      // after-A (10) and after-B (20) remain; after-C (30) is dropped (it preceded D).
+      expect(waitValuesAfter).toEqual([10, 20]);
+    });
+
+    it('after any add or removal, step count and wait count differ by exactly one', () => {
+      component.addStep('menschlich');
+      component.addStep('menschlich');
+      let steps = component.getLiveStepCount('menschlich');
+      let waits = component.getWaitsArray('menschlich').length;
+      expect(steps - waits).toBe(1);
+
+      component.removeStep('menschlich', 5); // middle removal
+      steps = component.getLiveStepCount('menschlich');
+      waits = component.getWaitsArray('menschlich').length;
+      expect(steps - waits).toBe(1);
+
+      component.removeStep('menschlich', component.getLiveStepCount('menschlich') - 1); // last-step removal
+      steps = component.getLiveStepCount('menschlich');
+      waits = component.getWaitsArray('menschlich').length;
+      expect(steps - waits).toBe(1);
+    });
+  });
+
+  // ─── Step names (REQ-103) — rename read sites, empty-name fallback ────────
+
+  describe('step names (REQ-103)', () => {
+    it('a rename appears in the wait tooltip, the bar\'s spoken label and the flow-diagram data — not only in the input', () => {
+      const ctrl = component.getWorksArray('halbautomatisch').at(0) as FormGroup;
+      component.getNameCtrl(ctrl).setValue('Mein Auslöser');
+
+      expect(component.getWaitTooltip(2, 0)).toContain('Mein Auslöser');
+      expect(component.getWorkAriaLabel(2, 0)).toContain('Mein Auslöser');
+      expect(component.getFlowchartSchritte(2)[0].label).toBe('Mein Auslöser');
+    });
+
+    it('an empty name falls back to "Schritt N" using the step\'s CURRENT position, proven after a removal shifts it', () => {
+      // Clear the name of the step originally at index 3 (position 4) on halbautomatisch.
+      const ctrl = component.getWorksArray('halbautomatisch').at(3) as FormGroup;
+      component.getNameCtrl(ctrl).setValue('');
+
+      // Remove the step at index 0: the empty-named step shifts from index 3 to index 2.
+      component.removeStep('halbautomatisch', 0);
+
+      expect(component.getStepName('halbautomatisch', 2)).toBe('Schritt 3');
+    });
+
+    it('editing a name never changes any duration or total', fakeAsync(() => {
+      const totalBefore = component.getProzessTotal(2);
+      const ctrl = component.getWorksArray('halbautomatisch').at(0) as FormGroup;
+
+      component.getNameCtrl(ctrl).setValue('Ein anderer Name');
+      tick(150);
+
+      expect(component.getProzessTotal(2)).toBe(totalBefore);
+    }));
+
+    it('renaming a step in "Agile mit Menschen" does not rename anything in "Agile mit KI"', () => {
+      const agileKiNameBefore = component.getStepName('agileKi', 3);
+
+      const ctrl = component.getWorksArray('menschlich').at(3) as FormGroup;
+      component.getNameCtrl(ctrl).setValue('Nur menschlich');
+
+      expect(component.getStepName('agileKi', 3)).toBe(agileKiNameBefore);
+    });
+  });
+
+  // ─── Limits (REQ-106) — floor 1, cap 50, blocked-but-focusable ────────────
+
+  describe('limits (REQ-106): blocked but still focusable', () => {
+    it('isRemoveBlocked() is true at exactly 1 step and removeStep() is then a no-op', fakeAsync(() => {
+      component.removeStep('vollautomatisch', 1); // 2 -> 1 (the floor)
+      tick(150);
+
+      expect(component.getLiveStepCount('vollautomatisch')).toBe(1);
+      expect(component.isRemoveBlocked('vollautomatisch')).toBeTrue();
+
+      component.removeStep('vollautomatisch', 0); // blocked: no-op
+      tick(150);
+
+      expect(component.getLiveStepCount('vollautomatisch')).toBe(1);
+    }));
+
+    it('isAddBlocked() is true at exactly 50 steps and addStep() is then a no-op', fakeAsync(() => {
+      for (let i = 0; i < 48; i++) component.addStep('vollautomatisch'); // 2 -> 50
+      tick(150);
+
+      expect(component.getLiveStepCount('vollautomatisch')).toBe(50);
+      expect(component.isAddBlocked('vollautomatisch')).toBeTrue();
+
+      component.addStep('vollautomatisch'); // blocked: no-op
+      tick(150);
+
+      expect(component.getLiveStepCount('vollautomatisch')).toBe(50);
+    }));
+
+    it('the remove button carries aria-disabled="true" (never the native disabled attribute) when blocked at the floor', () => {
+      const f = TestBed.createComponent(RechnerComponent);
+      f.componentInstance.activeTab = 4; // vollautomatisch
+      f.detectChanges();
+      f.componentInstance.removeStep('vollautomatisch', 1); // 2 -> 1 (floor)
+      f.detectChanges();
+
+      const btn = f.nativeElement.querySelector('#form-vollautomatisch .step-remove-btn') as HTMLButtonElement;
+      expect(btn.disabled).toBeFalse();
+      expect(btn.getAttribute('aria-disabled')).toBe('true');
+    });
+
+    it('the add button carries aria-disabled="true" (never the native disabled attribute) when blocked at the cap', () => {
+      const f = TestBed.createComponent(RechnerComponent);
+      f.componentInstance.activeTab = 4; // vollautomatisch
+      f.detectChanges();
+      for (let i = 0; i < 48; i++) f.componentInstance.addStep('vollautomatisch'); // 2 -> 50
+      f.detectChanges();
+
+      const btn = f.nativeElement.querySelector('#form-vollautomatisch .step-add-btn') as HTMLButtonElement;
+      expect(btn.disabled).toBeFalse();
+      expect(btn.getAttribute('aria-disabled')).toBe('true');
+    });
+  });
+
+  // ─── Live region (REQ-104) — announces the action + the new count ─────────
+
+  describe('live region text (REQ-104)', () => {
+    it('reports "Schritt hinzugefügt, jetzt N Schritte" after an add, and the singular "…1 Schritt" after removing down to 1', () => {
+      component.addStep('vollautomatisch'); // 2 -> 3
+      expect(component.getLiveRegionText('vollautomatisch')).toBe('Schritt hinzugefügt, jetzt 3 Schritte');
+
+      component.removeStep('vollautomatisch', 2);
+      component.removeStep('vollautomatisch', 1);
+      expect(component.getLiveRegionText('vollautomatisch')).toBe('Schritt entfernt, jetzt 1 Schritt');
+    });
+  });
+
+  // ─── Charts reflect a step-count change, past the 150ms debounce (REQ-104) ─
+
+  describe('charts reflect a step-count change past the debounce (REQ-104)', () => {
+    it('bar segments, the flow diagram and the total all reflect an add, once the debounce has elapsed', fakeAsync(() => {
+      const totalBefore = component.getProzessTotal(3); // vollautomatisch
+      const workSegCountBefore = component.getSegments(3, 600).filter((s) => s.type === 'work').length;
+      const flowCountBefore = component.getFlowchartSchritte(3).length;
+
+      component.addStep('vollautomatisch');
+      tick(150);
+
+      // The new step is 0 minutes, so the total is unchanged even though the step count grew.
+      expect(component.getProzessTotal(3)).toBe(totalBefore);
+      expect(component.getSegments(3, 600).filter((s) => s.type === 'work').length).toBe(workSegCountBefore + 1);
+      expect(component.getFlowchartSchritte(3).length).toBe(flowCountBefore + 1);
+    }));
+
+    it('Pie A (work vs. wait) reflects a removal, once the debounce has elapsed', fakeAsync(() => {
+      const ctrl = component.getWorksArray('vollautomatisch').at(1) as FormGroup;
+      component.getValueCtrl(ctrl).setValue(120);
+      tick(150);
+      const workBefore = component.getWorkWaitTotals(3).work;
+
+      component.removeStep('vollautomatisch', 1); // removes the 120-minute step
+      tick(150);
+
+      expect(component.getWorkWaitTotals(3).work).toBe(workBefore - 120);
+    }));
+  });
+
+  // ─── Focus management (REQ-101, REQ-102) ──────────────────────────────────
+  //
+  // focusNewStepName()/focusAfterRemove() query `document.getElementById('form-' +
+  // key)` against the real global DOCUMENT, so the fixture must be attached to the
+  // real document.body for document.activeElement / getElementById to see it. Each
+  // test creates its OWN fixture with `activeTab` set BEFORE the first
+  // detectChanges() — the same defensive pattern the pre-existing flowchart specs
+  // in this file use, to sidestep ngbNav's pane-retention artifact under
+  // synchronous TestBed change detection.
+
+  describe('focus management (REQ-101, REQ-102)', () => {
+    const attached: ComponentFixture<RechnerComponent>[] = [];
+
+    afterEach(() => {
+      attached.forEach((f) => f.nativeElement.remove());
+      attached.length = 0;
+    });
+
+    function freshFixtureOnTab(activeTab: number): ComponentFixture<RechnerComponent> {
+      const f = TestBed.createComponent(RechnerComponent);
+      f.componentInstance.activeTab = activeTab;
+      document.body.appendChild(f.nativeElement);
+      attached.push(f);
+      f.detectChanges();
+      return f;
+    }
+
+    it("focus lands in the new step's name field, ready to overwrite, after an add", fakeAsync(() => {
+      const f = freshFixtureOnTab(3); // halbautomatisch
+
+      const addBtn = f.nativeElement.querySelector('#form-halbautomatisch .step-add-btn') as HTMLButtonElement;
+      addBtn.click();
+      f.detectChanges();
+      tick(150);
+
+      const inputs = f.nativeElement.querySelectorAll('#form-halbautomatisch .step-name-input');
+      expect(document.activeElement).toBe(inputs[inputs.length - 1]);
+    }));
+
+    it('focus lands on the remove button of the step now sitting in the removed position (middle removal)', fakeAsync(() => {
+      const f = freshFixtureOnTab(3); // halbautomatisch, 11 steps
+
+      const removeBtnsBefore = f.nativeElement.querySelectorAll('#form-halbautomatisch .step-remove-btn');
+      (removeBtnsBefore[2] as HTMLButtonElement).click(); // remove step at index 2 (not last)
+      f.detectChanges();
+      tick(150);
+
+      const removeBtnsAfter = f.nativeElement.querySelectorAll('#form-halbautomatisch .step-remove-btn');
+      expect(document.activeElement).toBe(removeBtnsAfter[2]);
+    }));
+
+    it('focus lands on the remove button of the new last step, after removing the last step', fakeAsync(() => {
+      const f = freshFixtureOnTab(3); // halbautomatisch, 11 steps
+
+      const removeBtnsBefore = f.nativeElement.querySelectorAll('#form-halbautomatisch .step-remove-btn');
+      const lastIdx = removeBtnsBefore.length - 1;
+      (removeBtnsBefore[lastIdx] as HTMLButtonElement).click(); // remove the last step
+      f.detectChanges();
+      tick(150);
+
+      const removeBtnsAfter = f.nativeElement.querySelectorAll('#form-halbautomatisch .step-remove-btn');
+      expect(document.activeElement).toBe(removeBtnsAfter[removeBtnsAfter.length - 1]);
+    }));
+
+    it('focus lands on "Schritt hinzufügen" once the list reaches the floor', fakeAsync(() => {
+      const f = freshFixtureOnTab(4); // vollautomatisch, 2 steps
+
+      const removeBtns = f.nativeElement.querySelectorAll('#form-vollautomatisch .step-remove-btn');
+      (removeBtns[1] as HTMLButtonElement).click(); // remove down to 1 step (the floor)
+      f.detectChanges();
+      tick(150);
+
+      const addBtn = f.nativeElement.querySelector('#form-vollautomatisch .step-add-btn');
+      expect(document.activeElement).toBe(addBtn);
+    }));
+  });
+
+  // ─── Role picker (REQ-108) ──────────────────────────────────────────────────
+
+  describe('role picker (REQ-108)', () => {
+    it("getStepRole() returns the step's actual current role, not always null, for existing menschlich steps", () => {
+      expect(component.getStepRole('menschlich', 0)).toBeNull(); // trigger step: no role
+      expect(component.getStepRole('menschlich', 1)).toBe('BA');
+      expect(component.getStepRole('menschlich', 5)).toBe('Dev');
+      expect(component.getStepRole('menschlich', 12)).toBe('Tester');
+    });
+
+    it('the role picker <select> shows "— Keine —" for a role-less step and the assigned role for others, with a step-naming aria-label', () => {
+      const selects = fixture.nativeElement.querySelectorAll('#form-menschlich select[aria-label^="Rolle für"]');
+      expect((selects[0] as HTMLSelectElement).value).toBe(''); // trigger step: no role
+      expect((selects[1] as HTMLSelectElement).value).toBe('BA');
+      expect(selects[1].getAttribute('aria-label')).toBe('Rolle für Schritt 2');
+    });
+
+    it("changing the picker updates that step's role and the role pie + its note on the very next render, without touching duration, name or total", () => {
+      const totalBefore = component.getProzessTotal(0);
+      const nameBefore = component.getStepName('menschlich', 1);
+      const workValueBefore = component.getValueCtrl(component.getWorksArray('menschlich').at(1) as FormGroup).value;
+      const splitBefore = component.getRollenSplit(0)!;
+      expect(splitBefore.ba).toBe(180);
+
+      const select = fixture.nativeElement.querySelectorAll(
+        '#form-menschlich select[aria-label^="Rolle für"]',
+      )[1] as HTMLSelectElement;
+      select.value = 'Dev';
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      const splitAfter = component.getRollenSplit(0)!;
+      expect(splitAfter.ba).toBe(splitBefore.ba - 60); // step 2 (works[1]=60) moved off BA
+      expect(splitAfter.dev).toBe(splitBefore.dev + 60);
+      expect(splitAfter.tester).toBe(splitBefore.tester);
+      expect(component.getRollenPieNote(0)).toContain('Nur Schritte mit Rolle zählen');
+
+      expect(component.getProzessTotal(0)).toBe(totalBefore);
+      expect(component.getStepName('menschlich', 1)).toBe(nameBefore);
+      expect(component.getValueCtrl(component.getWorksArray('menschlich').at(1) as FormGroup).value).toBe(
+        workValueBefore,
+      );
+    });
+
+    it('the role picker is present on the two agile processes and absent on the two KI-only processes', () => {
+      const cases: Array<[ProzessKey, number, boolean]> = [
+        ['menschlich', 1, true],
+        ['agileKi', 2, true],
+        ['halbautomatisch', 3, false],
+        ['vollautomatisch', 4, false],
+      ];
+      for (const [key, tab, expectPresent] of cases) {
+        const f = TestBed.createComponent(RechnerComponent);
+        f.componentInstance.activeTab = tab;
+        f.detectChanges();
+
+        const select = f.nativeElement.querySelector(`#form-${key} select[aria-label^="Rolle für"]`);
+        expect(!!select).toBe(expectPresent);
+      }
+    });
+
+    it('changing a role on menschlich never crosses into agileKi, and vice versa', () => {
+      const agileKiBefore = component.getStepRole('agileKi', 1);
+      component.setStepRole('menschlich', 1, 'Tester');
+      expect(component.getStepRole('agileKi', 1)).toBe(agileKiBefore);
+
+      const menschlichBefore = component.getStepRole('menschlich', 2);
+      component.setStepRole('agileKi', 2, 'Tester');
+      expect(component.getStepRole('menschlich', 2)).toBe(menschlichBefore);
+    });
+
+    it('roles are never included in the save payload (formZuPayload via neuSpeichern)', () => {
+      mockSzenarioService.create.and.returnValue(of(makeFullSzenario({ id: 99 })));
+      component.setStepRole('menschlich', 1, 'Tester');
+      component.nameInput = 'Rollen-Test';
+
+      component.neuSpeichern();
+
+      const payload = mockSzenarioService.create.calls.mostRecent().args[0] as SzenarioCreate;
+      expect(Object.keys(payload.humanSteps).sort()).toEqual(['names', 'waits', 'works']);
+      expect(Object.keys(payload.agileKiSteps).sort()).toEqual(['names', 'waits', 'works']);
+    });
+  });
+
+  // ─── Teardown on removal (memory — Technical Note 7) ───────────────────────
+
+  describe('teardown on removal: no growing set of subscriptions or map entries', () => {
+    it("removing a step unsubscribes its unit-conversion subscription and deletes its letzteEinheit entry", () => {
+      const worksArray = component.getWorksArray('vollautomatisch');
+      const unitCtrl = component.getUnitCtrl(worksArray.at(1) as FormGroup);
+      const maps = unitConversionMaps(component);
+
+      expect(maps.einheitSubscriptions.has(unitCtrl)).toBeTrue();
+      expect(maps.letzteEinheit.has(unitCtrl)).toBeTrue();
+      const sub = maps.einheitSubscriptions.get(unitCtrl)!;
+      expect(sub.closed).toBeFalse();
+
+      component.removeStep('vollautomatisch', 1);
+
+      expect(sub.closed).toBeTrue();
+      expect(maps.einheitSubscriptions.has(unitCtrl)).toBeFalse();
+      expect(maps.letzteEinheit.has(unitCtrl)).toBeFalse();
+    });
+
+    it('repeated add/remove cycles leave the subscription and letzteEinheit map sizes unchanged from their starting size', fakeAsync(() => {
+      const maps = unitConversionMaps(component);
+      const sizeBefore = maps.einheitSubscriptions.size;
+      const mapSizeBefore = maps.letzteEinheit.size;
+
+      for (let i = 0; i < 5; i++) {
+        component.addStep('vollautomatisch');
+        const idx = component.getWorksArray('vollautomatisch').length - 1;
+        component.removeStep('vollautomatisch', idx);
+      }
+      tick(150);
+
+      expect(maps.einheitSubscriptions.size).toBe(sizeBefore);
+      expect(maps.letzteEinheit.size).toBe(mapSizeBefore);
+    }));
+  });
+
+  // ─── ladeScenario() rebuilds the form AND the role state (REQ-301, Group 6) ─
+
+  describe('ladeScenario() rebuilds the form and the role state to a non-default length', () => {
+    it('a 25-step agileKiSteps scenario rebuilds the works/waits FormArrays and the agileKi role state to 25', () => {
+      const works = Array.from({ length: 25 }, (_, i) => i + 1);
+      const waits = Array.from({ length: 24 }, (_, i) => i + 1);
+      const szenario = makeFullSzenario({ agileKiSteps: { works, waits } });
+
+      component.ladeScenario(szenario);
+
+      expect(component.getWorksArray('agileKi').length).toBe(25);
+      expect(component.getWaitsArray('agileKi').length).toBe(24);
+      expect(component.getRollen('agileKi').length).toBe(25);
+    });
+
+    it('a 1-step, 0-wait scenario loads for automatedSteps (REQ-106 floor)', () => {
+      const szenario = makeFullSzenario({ automatedSteps: { works: [42], waits: [] } });
+
+      component.ladeScenario(szenario);
+
+      expect(component.getWorksArray('vollautomatisch').length).toBe(1);
+      expect(component.getWaitsArray('vollautomatisch').length).toBe(0);
+      expect(component.getValueCtrl(component.getWorksArray('vollautomatisch').at(0) as FormGroup).value).toBe(42);
+    });
+
+    it('a scenario shrinking menschlich to 5 steps also shrinks the menschlich role state to 5', () => {
+      const works = [10, 20, 30, 40, 50];
+      const waits = [1, 2, 3, 4];
+      const szenario = makeFullSzenario({ humanSteps: { works, waits } });
+
+      component.ladeScenario(szenario);
+
+      expect(component.getWorksArray('menschlich').length).toBe(5);
+      expect(component.getRollen('menschlich').length).toBe(5);
+    });
+  });
+
+  // ─── ladeScenario() never mutates the shared default constants ────────────
+
+  describe('ladeScenario() never mutates the shared default label/role constants', () => {
+    it('PROZESS_STEP_LABELS stays byte-identical (reference and values) after a load that changes step count', () => {
+      const labelsRefBefore = PROZESS_STEP_LABELS.menschlich;
+      const labelsValuesBefore = [...labelsRefBefore];
+
+      const works = Array.from({ length: 25 }, (_, i) => i + 1);
+      const waits = Array.from({ length: 24 }, (_, i) => i + 1);
+      component.ladeScenario(makeFullSzenario({ humanSteps: { works, waits } }));
+
+      expect(PROZESS_STEP_LABELS.menschlich).toBe(labelsRefBefore);
+      expect(PROZESS_STEP_LABELS.menschlich).toEqual(labelsValuesBefore);
+      expect(PROZESS_STEP_LABELS.agileKi).toBe(PROZESS_STEP_LABELS.menschlich); // still shared
+    });
+
+    it('PROZESS_ROLLEN stays byte-identical (reference and values) after a load that shrinks agileKi', () => {
+      const rollenRefBefore = PROZESS_ROLLEN.menschlich;
+      const rollenValuesBefore = [...rollenRefBefore];
+
+      component.ladeScenario(makeFullSzenario({ agileKiSteps: { works: [10], waits: [] } }));
+
+      expect(PROZESS_ROLLEN.menschlich).toBe(rollenRefBefore);
+      expect(PROZESS_ROLLEN.menschlich).toEqual(rollenValuesBefore);
+      expect(PROZESS_ROLLEN.agileKi).toBe(PROZESS_ROLLEN.menschlich); // still shared
+    });
+  });
+
+  // ─── Save payload: current (possibly non-default) counts + raw names (REQ-301/302) ─
+
+  describe('formZuPayload() via neuSpeichern(): non-default counts and raw (non-synthesized) names', () => {
+    it('sends the current step counts after an add, and the raw control names including the unmodified "Neuer Schritt" default', () => {
+      mockSzenarioService.create.and.returnValue(of(makeFullSzenario({ id: 7 })));
+
+      component.addStep('vollautomatisch'); // 2 -> 3 steps
+      component.nameInput = 'Zähl-Test';
+
+      component.neuSpeichern();
+
+      const payload = mockSzenarioService.create.calls.mostRecent().args[0] as SzenarioCreate;
+      expect(payload.automatedSteps.works.length).toBe(3);
+      expect(payload.automatedSteps.waits.length).toBe(2);
+      expect(payload.automatedSteps.names).toEqual([
+        'Auslöser: Anfrage oder Fehler',
+        'KI schreibt Ticket, Code und Tests',
+        'Neuer Schritt',
+      ]);
+    });
+
+    it('sends an emptied name as the raw empty string, not the "Schritt N" display fallback', () => {
+      mockSzenarioService.create.and.returnValue(of(makeFullSzenario({ id: 8 })));
+      const ctrl = component.getWorksArray('vollautomatisch').at(0) as FormGroup;
+      component.getNameCtrl(ctrl).setValue('');
+      component.nameInput = 'Leer-Test';
+
+      component.neuSpeichern();
+
+      const payload = mockSzenarioService.create.calls.mostRecent().args[0] as SzenarioCreate;
+      expect(payload.automatedSteps.names![0]).toBe('');
     });
   });
 });

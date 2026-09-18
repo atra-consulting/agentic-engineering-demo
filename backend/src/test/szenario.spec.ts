@@ -24,7 +24,16 @@
  *         is a manual/scripted check (see PLAN-RECHNER-OVERHAUL.md §8), not
  *         automatable against the fresh CI DB this harness always starts with.
  *
- * Process step counts: human 19, agileKi 19, semiAutomated 11, automated 2.
+ * Structural validation (CALCULATOR-SELECTABLE-STEPS, REQ-301/REQ-302):
+ * `PROCESS_STEP_COUNTS` and its fixed-length rules are gone. Each of the four
+ * processes (humanSteps/agileKiSteps/semiAutomatedSteps/automatedSteps) now
+ * independently requires works.length in [1, 50] and waits.length === works.length - 1,
+ * enforced by a cross-field superRefine with an explicit error path (so the
+ * fieldErrors key stays `<process>.waits`). An optional `names` array, when
+ * present, must match works.length (`<process>.names` on mismatch) and each
+ * entry is capped at 200 characters. 19/19/11/2 (human/agileKi/semi/automated)
+ * remains the seed default and a still-valid shape — it is no longer the only
+ * valid shape.
  */
 import { test, expect, request as playwrightRequest } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
@@ -105,6 +114,7 @@ function validPayload(name: string) {
 interface ProzessDauer {
   works: number[];
   waits: number[];
+  names?: string[];
 }
 
 interface SzenarioDTO {
@@ -127,6 +137,46 @@ interface ErrorBody {
 
 function sum(values: number[]): number {
   return values.reduce((acc, v) => acc + v, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Helpers for variable-length step arrays (REQ-301 / REQ-302).
+// The fixed HUMAN_WORKS_19 / AGILE_KI_WORKS_19 / etc. constants above only
+// exist at the old default lengths; these build synthetic, internally
+// consistent arrays at any length so the new structural rule can be tested
+// away from the old fixed boundaries.
+// ---------------------------------------------------------------------------
+
+/** Build a synthetic `works` array of the given length; every entry is a valid, in-range duration (10 minutes). */
+function buildWorks(length: number): number[] {
+  return Array.from({ length }, () => 10);
+}
+
+/** Build a synthetic `waits` array of the given length; every entry is a valid, in-range duration (5 minutes). */
+function buildWaits(length: number): number[] {
+  return Array.from({ length }, () => 5);
+}
+
+/** Build a synthetic `names` array of the given length: "Name 1", "Name 2", ... */
+function buildNames(length: number): string[] {
+  return Array.from({ length }, (_, i) => `Name ${i + 1}`);
+}
+
+type ProcessKey = 'humanSteps' | 'agileKiSteps' | 'semiAutomatedSteps' | 'automatedSteps';
+
+/**
+ * Build a full, otherwise-valid szenario payload (via validPayload()) with a
+ * single process overridden. Used so only the process under test deviates
+ * from the known-good default shape. Returns a loosely-typed object (not
+ * `any`) since it exists only to be handed straight to `adminCtx.post`/`.put`.
+ */
+function payloadWithProcessOverride(
+  name: string,
+  process: ProcessKey,
+  override: { works: number[]; waits: number[]; names?: string[] }
+): Record<string, unknown> {
+  const base = validPayload(name) as Record<string, unknown>;
+  return { ...base, [process]: override };
 }
 
 // ---------------------------------------------------------------------------
@@ -535,10 +585,13 @@ test.describe('Validation errors', () => {
     });
   });
 
-  // ── Wrong works length (18 instead of 19) ─────────────────────────────────
+  // ── humanSteps.works shortened to 18, waits left at the old 18 → under the
+  // new structural rule this is a works/waits MISMATCH (18 works needs 17
+  // waits), not "wrong fixed length 19". The field-error key moves from
+  // humanSteps.works to humanSteps.waits, per the superRefine's explicit path.
 
-  test('POST with humanSteps.works length 18 (not 19) → 400 with fieldErrors key', async () => {
-    const shortWorks = HUMAN_WORKS_19.slice(0, 18); // 18 elements
+  test('POST with humanSteps.works length 18 (waits still 18, needs 17) → 400 works/waits mismatch on humanSteps.waits', async () => {
+    const shortWorks = HUMAN_WORKS_19.slice(0, 18); // 18 elements; waits stays at the old 18, which no longer matches (18 works needs exactly 17 waits)
 
     const resp = await adminCtx.post('/api/szenarien', {
       data: {
@@ -556,15 +609,18 @@ test.describe('Validation errors', () => {
 
     const body = await resp.json() as ErrorBody;
 
-    await test.step('fieldErrors contains a humanSteps.works key', () => {
-      expect(typeof body.fieldErrors?.['humanSteps.works']).toBe('string');
+    await test.step('fieldErrors contains a humanSteps.waits key (the superRefine path), not humanSteps.works', () => {
+      expect(typeof body.fieldErrors?.['humanSteps.waits']).toBe('string');
+      expect(body.fieldErrors?.['humanSteps.works']).toBeUndefined();
     });
   });
 
-  // ── Wrong waits length (17 instead of 18) ─────────────────────────────────
+  // ── humanSteps.waits shortened to 17, works left at the old 19 → still a
+  // works/waits MISMATCH under the new rule (19 works needs exactly 18
+  // waits, not 17) — same field-error key as before, but for the new reason.
 
-  test('POST with humanSteps.waits length 17 (not 18) → 400 with fieldErrors key', async () => {
-    const shortWaits = HUMAN_WAITS_18.slice(0, 17); // 17 elements
+  test('POST with humanSteps.waits length 17 (works still 19, needs 18) → 400 works/waits mismatch on humanSteps.waits', async () => {
+    const shortWaits = HUMAN_WAITS_18.slice(0, 17); // 17 elements; works stays at 19, which requires exactly 18 waits
 
     const resp = await adminCtx.post('/api/szenarien', {
       data: {
@@ -760,7 +816,11 @@ test.describe('Validation for semiAutomated and automated step counts', () => {
     await adminCtx.dispose();
   });
 
-  test('POST with semiAutomatedSteps.works length 10 (not 11) → 400', async () => {
+  // ── semiAutomatedSteps.works shortened to 10, waits left at the old 10 →
+  // a works/waits MISMATCH under the new rule (10 works needs 9 waits, not
+  // 10), not "wrong fixed length 11". The key moves to semiAutomatedSteps.waits.
+
+  test('POST with semiAutomatedSteps.works length 10 (waits still 10, needs 9) → 400 works/waits mismatch on semiAutomatedSteps.waits', async () => {
     const resp = await adminCtx.post('/api/szenarien', {
       data: {
         name: `Invalid-Semi-Works-${Date.now()}`,
@@ -777,12 +837,17 @@ test.describe('Validation for semiAutomated and automated step counts', () => {
 
     const body = await resp.json() as ErrorBody;
 
-    await test.step('fieldErrors contains semiAutomatedSteps.works key', () => {
-      expect(typeof body.fieldErrors?.['semiAutomatedSteps.works']).toBe('string');
+    await test.step('fieldErrors contains a semiAutomatedSteps.waits key, not semiAutomatedSteps.works', () => {
+      expect(typeof body.fieldErrors?.['semiAutomatedSteps.waits']).toBe('string');
+      expect(body.fieldErrors?.['semiAutomatedSteps.works']).toBeUndefined();
     });
   });
 
-  test('POST with automatedSteps.waits length 0 (not 1) → 400', async () => {
+  // ── automatedSteps.waits emptied to 0, works left at the old 2 → still a
+  // works/waits MISMATCH under the new rule (2 works needs exactly 1 wait,
+  // not 0) — same field-error key as before, but for the new reason.
+
+  test('POST with automatedSteps.waits length 0 (works still 2, needs 1) → 400 works/waits mismatch on automatedSteps.waits', async () => {
     const resp = await adminCtx.post('/api/szenarien', {
       data: {
         name: `Invalid-Auto-Waits-${Date.now()}`,
@@ -820,10 +885,15 @@ test.describe('Validation for agileKiSteps step counts', () => {
     await adminCtx.dispose();
   });
 
-  // ── Wrong works length (18 instead of 19) ─────────────────────────────────
+  // ── agileKiSteps.works shortened to 18, waits left at the old 18 → under
+  // the new structural rule this is a works/waits MISMATCH (18 works needs
+  // 17 waits), not "wrong fixed length 19". The key moves from
+  // agileKiSteps.works to agileKiSteps.waits, exactly like the humanSteps.works
+  // case above — this suite is the one most likely to be skipped in a
+  // rewrite, since agileKiSteps was added later than the other three processes.
 
-  test('POST with agileKiSteps.works length 18 (not 19) → 400 with fieldErrors key', async () => {
-    const shortWorks = AGILE_KI_WORKS_19.slice(0, 18); // 18 elements
+  test('POST with agileKiSteps.works length 18 (waits still 18, needs 17) → 400 works/waits mismatch on agileKiSteps.waits', async () => {
+    const shortWorks = AGILE_KI_WORKS_19.slice(0, 18); // 18 elements; waits stays at the old 18, which no longer matches (18 works needs exactly 17 waits)
 
     const resp = await adminCtx.post('/api/szenarien', {
       data: {
@@ -841,15 +911,21 @@ test.describe('Validation for agileKiSteps step counts', () => {
 
     const body = await resp.json() as ErrorBody;
 
-    await test.step('fieldErrors contains an agileKiSteps.works key', () => {
-      expect(typeof body.fieldErrors?.['agileKiSteps.works']).toBe('string');
+    await test.step('fieldErrors contains an agileKiSteps.waits key (the superRefine path), not agileKiSteps.works', () => {
+      expect(typeof body.fieldErrors?.['agileKiSteps.waits']).toBe('string');
+      expect(body.fieldErrors?.['agileKiSteps.works']).toBeUndefined();
     });
   });
 
-  // ── Wrong waits length (17 instead of 18) ─────────────────────────────────
+  // ── agileKiSteps.waits shortened to 17, works left at the old 19 → still a
+  // works/waits MISMATCH under the new rule (19 works needs exactly 18
+  // waits, not 17) — re-justified against the new rule, same field-error
+  // key as before. Skipping this test would leave it passing with an
+  // unchanged key even if agileKiSteps never got converted to the
+  // structural rules at all.
 
-  test('POST with agileKiSteps.waits length 17 (not 18) → 400 with fieldErrors key', async () => {
-    const shortWaits = AGILE_KI_WAITS_18.slice(0, 17); // 17 elements
+  test('POST with agileKiSteps.waits length 17 (works still 19, needs 18) → 400 works/waits mismatch on agileKiSteps.waits', async () => {
+    const shortWaits = AGILE_KI_WAITS_18.slice(0, 17); // 17 elements; works stays at 19, which requires exactly 18 waits
 
     const resp = await adminCtx.post('/api/szenarien', {
       data: {
@@ -869,6 +945,374 @@ test.describe('Validation for agileKiSteps step counts', () => {
 
     await test.step('fieldErrors contains an agileKiSteps.waits key', () => {
       expect(typeof body.fieldErrors?.['agileKiSteps.waits']).toBe('string');
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite: variable step counts (REQ-301) — proves the new structural rule
+// genuinely ACCEPTS a non-default, internally-consistent step count. Every
+// negative test above this point stays a 400 test; none of them would fail
+// if variable step counts were rejected outright. These positive tests are
+// the load-bearing ones.
+// ---------------------------------------------------------------------------
+
+test.describe('Validation for variable step counts (REQ-301)', () => {
+  let adminCtx: APIRequestContext;
+
+  test.beforeAll(async () => {
+    adminCtx = await loginCtx('admin', 'admin123');
+  });
+
+  test.afterAll(async () => {
+    await adminCtx.dispose();
+  });
+
+  test('POST with humanSteps 25 works / 24 waits (non-default) → 201, round-trips unchanged', async () => {
+    const works = buildWorks(25);
+    const waits = buildWaits(24);
+    const name = `Variable-Human-${Date.now()}`;
+
+    const resp = await adminCtx.post('/api/szenarien', {
+      data: payloadWithProcessOverride(name, 'humanSteps', { works, waits }),
+    });
+
+    await test.step('status 201', () => {
+      expect(resp.status()).toBe(201);
+    });
+
+    const body = await resp.json() as SzenarioDTO;
+    const getResp = await adminCtx.get(`/api/szenarien/${body.id}`);
+    const getBody = await getResp.json() as SzenarioDTO;
+
+    await test.step('humanSteps.works round-trips unchanged at 25 elements', () => {
+      expect(getBody.humanSteps.works).toEqual(works);
+    });
+
+    await test.step('humanSteps.waits round-trips unchanged at 24 elements', () => {
+      expect(getBody.humanSteps.waits).toEqual(waits);
+    });
+
+    await adminCtx.delete(`/api/szenarien/${body.id}`);
+  });
+
+  // agileKiSteps specifically: this file's shared constants and helpers lean
+  // on humanSteps, so a generic "non-default count" test would default to
+  // humanSteps and leave the other three processes — especially
+  // agileKiSteps — with zero positive coverage.
+  test('POST with agileKiSteps 25 works / 24 waits (non-default) → 201, round-trips unchanged', async () => {
+    const works = buildWorks(25);
+    const waits = buildWaits(24);
+    const name = `Variable-AgileKi-${Date.now()}`;
+
+    const resp = await adminCtx.post('/api/szenarien', {
+      data: payloadWithProcessOverride(name, 'agileKiSteps', { works, waits }),
+    });
+
+    await test.step('status 201', () => {
+      expect(resp.status()).toBe(201);
+    });
+
+    const body = await resp.json() as SzenarioDTO;
+    const getResp = await adminCtx.get(`/api/szenarien/${body.id}`);
+    const getBody = await getResp.json() as SzenarioDTO;
+
+    await test.step('agileKiSteps.works round-trips unchanged at 25 elements', () => {
+      expect(getBody.agileKiSteps.works).toEqual(works);
+    });
+
+    await test.step('agileKiSteps.waits round-trips unchanged at 24 elements', () => {
+      expect(getBody.agileKiSteps.waits).toEqual(waits);
+    });
+
+    await adminCtx.delete(`/api/szenarien/${body.id}`);
+  });
+
+  test('POST with semiAutomatedSteps 1 work / 0 waits (floor boundary) → 201', async () => {
+    const name = `Variable-Floor-${Date.now()}`;
+
+    const resp = await adminCtx.post('/api/szenarien', {
+      data: payloadWithProcessOverride(name, 'semiAutomatedSteps', {
+        works: buildWorks(1),
+        waits: buildWaits(0),
+      }),
+    });
+
+    await test.step('status 201', () => {
+      expect(resp.status()).toBe(201);
+    });
+
+    const body = await resp.json() as SzenarioDTO;
+    await adminCtx.delete(`/api/szenarien/${body.id}`);
+  });
+
+  test('POST with automatedSteps 50 works / 49 waits (cap boundary) → 201', async () => {
+    const name = `Variable-Cap-${Date.now()}`;
+
+    const resp = await adminCtx.post('/api/szenarien', {
+      data: payloadWithProcessOverride(name, 'automatedSteps', {
+        works: buildWorks(50),
+        waits: buildWaits(49),
+      }),
+    });
+
+    await test.step('status 201', () => {
+      expect(resp.status()).toBe(201);
+    });
+
+    const body = await resp.json() as SzenarioDTO;
+    await adminCtx.delete(`/api/szenarien/${body.id}`);
+  });
+
+  test('POST with humanSteps 51 works (over the cap) → 400', async () => {
+    const name = `Variable-OverCap-${Date.now()}`;
+
+    const resp = await adminCtx.post('/api/szenarien', {
+      data: payloadWithProcessOverride(name, 'humanSteps', {
+        works: buildWorks(51),
+        waits: buildWaits(50), // matches the works/waits rule, so this isolates the cap violation
+      }),
+    });
+
+    await test.step('status 400', () => {
+      expect(resp.status()).toBe(400);
+    });
+
+    const body = await resp.json() as ErrorBody;
+
+    await test.step('fieldErrors contains a humanSteps.works key', () => {
+      expect(typeof body.fieldErrors?.['humanSteps.works']).toBe('string');
+    });
+  });
+
+  test('POST with humanSteps 0 works → 400', async () => {
+    const name = `Variable-ZeroWorks-${Date.now()}`;
+
+    const resp = await adminCtx.post('/api/szenarien', {
+      data: payloadWithProcessOverride(name, 'humanSteps', {
+        works: [],
+        waits: [],
+      }),
+    });
+
+    await test.step('status 400', () => {
+      expect(resp.status()).toBe(400);
+    });
+
+    const body = await resp.json() as ErrorBody;
+
+    await test.step('fieldErrors is an object', () => {
+      expect(typeof body.fieldErrors).toBe('object');
+      expect(body.fieldErrors).not.toBeNull();
+    });
+  });
+
+  test('POST with humanSteps 20 works / 15 waits (non-default count, mismatched) → 400 with fieldErrors key naming humanSteps.waits', async () => {
+    const name = `Variable-Mismatch-${Date.now()}`;
+
+    const resp = await adminCtx.post('/api/szenarien', {
+      data: payloadWithProcessOverride(name, 'humanSteps', {
+        works: buildWorks(20), // needs exactly 19 waits
+        waits: buildWaits(15),
+      }),
+    });
+
+    await test.step('status 400', () => {
+      expect(resp.status()).toBe(400);
+    });
+
+    const body = await resp.json() as ErrorBody;
+
+    await test.step('fieldErrors contains a humanSteps.waits key, proving the mismatch check works at non-default counts too', () => {
+      expect(typeof body.fieldErrors?.['humanSteps.waits']).toBe('string');
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite: backward compatibility — legacy shape through the real validator
+// (REQ-301). The seed test below only reads the seeded row back with a GET,
+// which never runs through request validation. These tests prove the legacy
+// 19/19/11/2 shape, with no names field, still passes POST/PUT validation.
+// ---------------------------------------------------------------------------
+
+test.describe('Backward compatibility — legacy shape (REQ-301)', () => {
+  let adminCtx: APIRequestContext;
+
+  test.beforeAll(async () => {
+    adminCtx = await loginCtx('admin', 'admin123');
+  });
+
+  test.afterAll(async () => {
+    await adminCtx.dispose();
+  });
+
+  test('POST with the exact legacy 19/19/11/2 shape, no names field → 201', async () => {
+    const name = `Legacy-Shape-${Date.now()}`;
+
+    const resp = await adminCtx.post('/api/szenarien', { data: validPayload(name) });
+
+    await test.step('status 201', () => {
+      expect(resp.status()).toBe(201);
+    });
+
+    const body = await resp.json() as SzenarioDTO;
+
+    await test.step('humanSteps.works has 19 elements', () => {
+      expect(body.humanSteps.works.length).toBe(19);
+    });
+
+    await test.step('agileKiSteps.works has 19 elements', () => {
+      expect(body.agileKiSteps.works.length).toBe(19);
+    });
+
+    await test.step('semiAutomatedSteps.works has 11 elements', () => {
+      expect(body.semiAutomatedSteps.works.length).toBe(11);
+    });
+
+    await test.step('automatedSteps.works has 2 elements', () => {
+      expect(body.automatedSteps.works.length).toBe(2);
+    });
+
+    await adminCtx.delete(`/api/szenarien/${body.id}`);
+  });
+
+  test('PUT with the exact legacy 19/19/11/2 shape, no names field → 200', async () => {
+    // Create a throwaway row to PUT against; its own initial shape does not
+    // matter — only the PUT payload below is what gets validated.
+    const createResp = await adminCtx.post('/api/szenarien', {
+      data: validPayload(`Legacy-Put-Base-${Date.now()}`),
+    });
+    expect(createResp.status()).toBe(201);
+    const created = await createResp.json() as SzenarioDTO;
+
+    const updatedName = `Legacy-Put-${Date.now()}`;
+    const putResp = await adminCtx.put(`/api/szenarien/${created.id}`, {
+      data: validPayload(updatedName),
+    });
+
+    await test.step('status 200', () => {
+      expect(putResp.status()).toBe(200);
+    });
+
+    const putBody = await putResp.json() as SzenarioDTO;
+
+    await test.step('name reflects the PUT', () => {
+      expect(putBody.name).toBe(updatedName);
+    });
+
+    await test.step('humanSteps.works has 19 elements', () => {
+      expect(putBody.humanSteps.works.length).toBe(19);
+    });
+
+    await adminCtx.delete(`/api/szenarien/${created.id}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite: step names (REQ-302)
+// ---------------------------------------------------------------------------
+
+test.describe('Validation for step names (REQ-302)', () => {
+  let adminCtx: APIRequestContext;
+
+  test.beforeAll(async () => {
+    adminCtx = await loginCtx('admin', 'admin123');
+  });
+
+  test.afterAll(async () => {
+    await adminCtx.dispose();
+  });
+
+  test('POST with humanSteps.names length matching works.length → 201, round-trips', async () => {
+    const names = buildNames(19); // matches HUMAN_WORKS_19's length
+    const name = `Names-Match-${Date.now()}`;
+
+    const resp = await adminCtx.post('/api/szenarien', {
+      data: payloadWithProcessOverride(name, 'humanSteps', {
+        works: HUMAN_WORKS_19,
+        waits: HUMAN_WAITS_18,
+        names,
+      }),
+    });
+
+    await test.step('status 201', () => {
+      expect(resp.status()).toBe(201);
+    });
+
+    const body = await resp.json() as SzenarioDTO;
+    const getResp = await adminCtx.get(`/api/szenarien/${body.id}`);
+    const getBody = await getResp.json() as SzenarioDTO;
+
+    await test.step('humanSteps.names round-trips unchanged', () => {
+      expect(getBody.humanSteps.names).toEqual(names);
+    });
+
+    await adminCtx.delete(`/api/szenarien/${body.id}`);
+  });
+
+  test('POST with no names field on any process → 201, names is absent', async () => {
+    const name = `Names-Absent-${Date.now()}`;
+
+    const resp = await adminCtx.post('/api/szenarien', { data: validPayload(name) });
+
+    await test.step('status 201', () => {
+      expect(resp.status()).toBe(201);
+    });
+
+    const body = await resp.json() as SzenarioDTO;
+
+    await test.step('humanSteps.names is absent (names is optional)', () => {
+      expect(body.humanSteps.names).toBeUndefined();
+    });
+
+    await adminCtx.delete(`/api/szenarien/${body.id}`);
+  });
+
+  test('POST with humanSteps.names length different from works.length → 400 with fieldErrors key naming humanSteps.names', async () => {
+    const name = `Names-Mismatch-${Date.now()}`;
+
+    const resp = await adminCtx.post('/api/szenarien', {
+      data: payloadWithProcessOverride(name, 'humanSteps', {
+        works: HUMAN_WORKS_19,
+        waits: HUMAN_WAITS_18,
+        names: buildNames(5), // 19 works, only 5 names
+      }),
+    });
+
+    await test.step('status 400', () => {
+      expect(resp.status()).toBe(400);
+    });
+
+    const body = await resp.json() as ErrorBody;
+
+    await test.step('fieldErrors contains a humanSteps.names key', () => {
+      expect(typeof body.fieldErrors?.['humanSteps.names']).toBe('string');
+    });
+  });
+
+  test('POST with a humanSteps.names entry over 200 characters → 400 with a fieldErrors key under humanSteps.names', async () => {
+    const name = `Names-TooLong-${Date.now()}`;
+    const names = buildNames(19);
+    names[0] = 'a'.repeat(201);
+
+    const resp = await adminCtx.post('/api/szenarien', {
+      data: payloadWithProcessOverride(name, 'humanSteps', {
+        works: HUMAN_WORKS_19,
+        waits: HUMAN_WAITS_18,
+        names,
+      }),
+    });
+
+    await test.step('status 400', () => {
+      expect(resp.status()).toBe(400);
+    });
+
+    const body = await resp.json() as ErrorBody;
+
+    await test.step('fieldErrors contains a key under humanSteps.names for the over-length entry', () => {
+      const matchingKey = Object.keys(body.fieldErrors).find((k) => k.startsWith('humanSteps.names'));
+      expect(matchingKey).toBeDefined();
     });
   });
 });

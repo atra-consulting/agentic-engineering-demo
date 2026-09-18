@@ -125,12 +125,14 @@ Saved scenarios for the Produktivität → Rechner cycle-time calculator. Each s
 |--------|-------------|-------------|
 | id | integer | PK, autoIncrement |
 | name | text | NOT NULL, UNIQUE |
-| humanSteps | text | NOT NULL, `CHECK (json_valid(...))` — JSON `{ works: number[19], waits: number[18] }` — Agile mit Menschen |
-| semiAutomatedSteps | text | NOT NULL, `CHECK (json_valid(...))` — JSON `{ works: number[11], waits: number[10] }` — KI-Prozess mit Feedback |
-| automatedSteps | text | NOT NULL, `CHECK (json_valid(...))` — JSON `{ works: number[2], waits: number[1] }` — KI-Prozess vollautomatisch |
-| agileKiSteps | text | NOT NULL, `CHECK (json_valid(...))` — JSON `{ works: number[19], waits: number[18] }` — Agile mit KI |
+| humanSteps | text | NOT NULL, `CHECK (json_valid(...))` — JSON `{ works: number[], waits: number[], names?: string[] }` — Agile mit Menschen |
+| semiAutomatedSteps | text | NOT NULL, `CHECK (json_valid(...))` — JSON `{ works: number[], waits: number[], names?: string[] }` — KI-Prozess mit Feedback |
+| automatedSteps | text | NOT NULL, `CHECK (json_valid(...))` — JSON `{ works: number[], waits: number[], names?: string[] }` — KI-Prozess vollautomatisch |
+| agileKiSteps | text | NOT NULL, `CHECK (json_valid(...))` — JSON `{ works: number[], waits: number[], names?: string[] }` — Agile mit KI |
 | createdAt | text | NOT NULL, default `datetime('now')` |
 | updatedAt | text | NOT NULL, default `datetime('now')` |
+
+Array lengths are now variable per scenario, not fixed per process: 1–50 `works` entries, `waits.length = works.length - 1`, and an optional `names` array matching `works.length`. These rules are validated at the application layer (`SzenarioSchema` in `backend/src/utils/validation.ts`), not by the `CHECK (json_valid(...))` constraint — that constraint only checks each column holds valid JSON, and it did not change. The seeded default scenario still writes 19/19/11/2 steps; that is a default, not a schema limit.
 
 `agileKiSteps` was added after `automatedSteps`, both in column order and in DDL — see the guarded ALTER note above. `works` are per-step active times (minutes); `waits` are the between-step delays (one fewer than steps). No FKs. Index: `idx_szenario_createdAt (createdAt DESC)`.
 
