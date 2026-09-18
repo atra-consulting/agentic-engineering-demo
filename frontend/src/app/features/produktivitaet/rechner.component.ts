@@ -15,6 +15,7 @@ import {
   FormControl,
   FormGroup,
   ReactiveFormsModule,
+  Validators,
 } from '@angular/forms';
 import { FormsModule } from '@angular/forms';
 import { NgbModal, NgbNavChangeEvent, NgbNavModule, NgbTooltipModule } from '@ng-bootstrap/ng-bootstrap';
@@ -24,6 +25,7 @@ import {
   PROZESS_ANNAHMEN,
   PROZESS_CAPTION,
   PROZESS_ROLLEN,
+  PROZESS_STEP_LABELS,
   PROZESSE,
   ProzessKey,
   Rolle,
@@ -49,6 +51,13 @@ import {
   maxWertFuerEinheit,
 } from './einheit';
 import { computeComparisonBars, computePieSlices, computeSegments, PieResult, SvgSegment } from './svg-util';
+
+/** The two processes that split their work time across BA / Dev / Tester. */
+const AGILE_KEYS = ['menschlich', 'agileKi'] as const;
+type AgileProzessKey = (typeof AGILE_KEYS)[number];
+
+/** A step name holds at most 200 characters (REQ-103), mirrored by the backend. */
+const MAX_NAME_LAENGE = 200;
 
 interface ProzessSnapshot {
   works: number[];
@@ -665,6 +674,21 @@ export class RechnerComponent implements OnInit {
    */
   private letzteEinheit = new Map<FormControl<ZeitEinheit>, ZeitEinheit>();
 
+  /**
+   * Live per-step role state for the two agile processes (REQ-107). Seeded ONCE per
+   * process by copying PROZESS_ROLLEN (see seedRollenAusDefaults); from then on a
+   * step's role travels with the step and is looked up by the step's CURRENT index,
+   * never re-derived from the constant.
+   *
+   * Each process owns its own array — `PROZESS_ROLLEN.menschlich` and
+   * `PROZESS_ROLLEN.agileKi` are the same object, so sharing one runtime array here
+   * would let an edit on one tab corrupt the other.
+   *
+   * Invariant: `prozessRollen.get(key).length === getWorksArray(key).length`.
+   * Whoever adds or removes a step must keep it that way (Group 4 / Group 6).
+   */
+  private prozessRollen = new Map<AgileProzessKey, (Rolle | null)[]>();
+
   // One Record<ProzessKey, ProzessSnapshot> holds works/waits/total for all four processes.
   private prozessDaten = signal<Record<ProzessKey, ProzessSnapshot>>(baueInitialeProzessDaten());
 
@@ -679,6 +703,7 @@ export class RechnerComponent implements OnInit {
 
   ngOnInit(): void {
     this.form = this.baueFormular();
+    this.seedRollenAusDefaults();
 
     // Initial calculation
     this.berechne(this.form.value);
@@ -709,18 +734,49 @@ export class RechnerComponent implements OnInit {
     const gruppen: Record<string, FormGroup> = {};
     for (const p of PROZESSE) {
       gruppen[p.key] = this.fb.group({
-        works: this.fb.array(this.baueSchrittArray(DEFAULT_DURATIONS[p.key].works)),
+        // Work steps carry their own name. The seed is a COPY of the shared label
+        // constant — `PROZESS_STEP_LABELS.menschlich` and `.agileKi` are the same
+        // array object, so handing the live reference to both processes would tie
+        // the two tabs together (and mutating it would corrupt the exported
+        // constant two specs assert on). Each name then lives in its own
+        // FormControl, so the two processes share nothing at runtime.
+        works: this.fb.array(
+          this.baueSchrittArray(DEFAULT_DURATIONS[p.key].works, [...PROZESS_STEP_LABELS[p.key]]),
+        ),
+        // Waits are not steps: no name control.
         waits: this.fb.array(this.baueSchrittArray(DEFAULT_DURATIONS[p.key].waits)),
       });
     }
     return this.fb.group(gruppen);
   }
 
-  private baueSchrittArray(minutes: number[]): FormGroup[] {
-    return minutes.map((min) => {
+  /**
+   * Builds the per-process role state by COPYING from PROZESS_ROLLEN, sized to the
+   * works array that exists right now (shorter defaults are padded with null).
+   *
+   * Only ever valid where roles legitimately come from the defaults: the initial
+   * build here, and a scenario load (Group 6), which stores no roles. NEVER call it
+   * after an add or a remove — that is exactly the position-based re-derivation
+   * REQ-107 forbids.
+   */
+  private seedRollenAusDefaults(): void {
+    for (const key of AGILE_KEYS) {
+      const anzahl = this.getWorksArray(key).length;
+      const quelle = PROZESS_ROLLEN[key];
+      const rollen: (Rolle | null)[] = [];
+      for (let i = 0; i < anzahl; i++) {
+        rollen.push(quelle[i] ?? null);
+      }
+      this.prozessRollen.set(key, rollen);
+    }
+  }
+
+  private baueSchrittArray(minutes: number[], names?: string[]): FormGroup[] {
+    return minutes.map((min, i) => {
       const group = this.fb.group({
         value: [min, durationValidatorsFor('Minuten')],
         unit: ['Minuten'],
+        ...(names ? { name: [names[i] ?? '', [Validators.maxLength(MAX_NAME_LAENGE)]] } : {}),
       });
       this.wireUnitConversion(group);
       return group;
@@ -798,6 +854,53 @@ export class RechnerComponent implements OnInit {
     return (ctrl as FormGroup).get('unit') as FormControl;
   }
 
+  /**
+   * Gets the 'name' FormControl from a WORK step group (AbstractControl).
+   * Wait groups carry no name — never call this on one.
+   */
+  getNameCtrl(ctrl: AbstractControl): FormControl {
+    return (ctrl as FormGroup).get('name') as FormControl;
+  }
+
+  /**
+   * How many step rows this process has RIGHT NOW. Replaces every live read of the
+   * descriptor's `stepCount`, which is only the count a process starts with.
+   */
+  getLiveStepCount(prozessKey: ProzessKey): number {
+    if (!this.form) return 0;
+    return this.getWorksArray(prozessKey).length;
+  }
+
+  /**
+   * The step's own live name, with a "Schritt N" fallback built from the step's
+   * CURRENT position (REQ-103). Single source for all six name read sites — the
+   * printed row, the two spoken labels in the row, the wait tooltip, the bar's
+   * spoken label and the flow-diagram box — so a rename shows up everywhere and an
+   * empty name falls back consistently, even after steps move.
+   */
+  getStepName(prozessKey: ProzessKey, index: number): string {
+    const fallback = `Schritt ${index + 1}`;
+    if (!this.form) return fallback;
+    const ctrl = this.getWorksArray(prozessKey).at(index);
+    const name = (ctrl?.get('name')?.value as string | null | undefined) ?? '';
+    return name.trim() ? name : fallback;
+  }
+
+  /** Same as getStepName(), addressed by the process's position in PROZESSE. */
+  private getStepNameByProzessIndex(prozessIndex: number, stepIndex: number): string {
+    const key = this.prozesse[prozessIndex]?.key;
+    return key ? this.getStepName(key, stepIndex) : `Schritt ${stepIndex + 1}`;
+  }
+
+  /**
+   * The live role state of an agile process (empty array for the two KI processes).
+   * Returns the array itself, so add/remove can keep it in lockstep with the works
+   * array — see the invariant on `prozessRollen`.
+   */
+  getRollen(prozessKey: ProzessKey): (Rolle | null)[] {
+    return this.prozessRollen.get(prozessKey as AgileProzessKey) ?? [];
+  }
+
   /** Current max allowed value for a step group's value input — depends on its own unit. */
   getValueMax(ctrl: AbstractControl): number {
     const unit = (this.getUnitCtrl(ctrl).value as ZeitEinheit) ?? 'Minuten';
@@ -843,6 +946,11 @@ export class RechnerComponent implements OnInit {
     for (const p of PROZESSE) {
       const feld = PROZESS_SZENARIO_FELD[p.key];
       const stored: ProzessDauer | undefined = s[feld];
+      // Still gated on the DEFAULT step count, and still a patch rather than a
+      // rebuild: a scenario with a different step count is rejected here today.
+      // Deliberately left alone by the dynamic-step-model foundation — the
+      // structural check (1..50 steps, waits === works - 1), the array rebuild and
+      // the role/name re-derivation on load land together in their own change.
       const quelle =
         stored && stored.works.length === p.stepCount ? stored : DEFAULT_DURATIONS[p.key];
       this.patchProzessArray(p.key, quelle.works, quelle.waits);
@@ -1022,14 +1130,16 @@ export class RechnerComponent implements OnInit {
   getWaitTooltip(prozessIndex: number, stepIndex: number): string {
     const snap = this.svgSnapshot().prozesse[prozessIndex];
     const waitMin = snap.waits[stepIndex] ?? 0;
-    const label = this.prozesse[prozessIndex]?.labels[stepIndex] ?? `Schritt ${stepIndex + 1}`;
+    // Name read site 1/6: the step's own live name, not the seed label constant.
+    const label = this.getStepNameByProzessIndex(prozessIndex, stepIndex);
     return `Wartezeit nach Schritt ${stepIndex + 1} (${label}): ${minutenZuDauer(waitMin)}`;
   }
 
   /** Builds the label/tooltip text for a work rect. */
   getWorkAriaLabel(prozessIndex: number, stepIndex: number): string {
     const snap = this.svgSnapshot().prozesse[prozessIndex];
-    const label = this.prozesse[prozessIndex]?.labels[stepIndex] ?? `Schritt ${stepIndex + 1}`;
+    // Name read site 2/6: the step's own live name, not the seed label constant.
+    const label = this.getStepNameByProzessIndex(prozessIndex, stepIndex);
     const workMin = snap.works[stepIndex] ?? 0;
     const waitMin = snap.waits[stepIndex] ?? null;
     let s = `Schritt ${stepIndex + 1}: ${label}. Arbeitszeit: ${minutenZuDauer(workMin)}`;
@@ -1066,7 +1176,9 @@ export class RechnerComponent implements OnInit {
     if (key !== 'menschlich' && key !== 'agileKi') return null;
 
     const snap = this.svgSnapshot().prozesse[index];
-    const rollen = PROZESS_ROLLEN[key];
+    // Live per-process role state, not PROZESS_ROLLEN[key][i]: a role belongs to its
+    // step, so it survives a removal above it instead of shifting onto a neighbour.
+    const rollen = this.getRollen(key);
     const totals: Record<Rolle, number> = { BA: 0, Dev: 0, Tester: 0 };
     snap.works.forEach((min, i) => {
       const rolle = rollen[i];
@@ -1075,16 +1187,41 @@ export class RechnerComponent implements OnInit {
     return { ba: totals.BA, dev: totals.Dev, tester: totals.Tester };
   }
 
+  /**
+   * Work minutes on steps that carry no role, agile processes only (REQ-107).
+   * These count in Pie A (Arbeit vs. Warten) but not in Pie B (Rollen), so the note
+   * under Pie B names the amount and the two pies stay reconcilable by hand.
+   */
+  getUnassignedWorkMinutes(index: number): number {
+    const key = this.prozesse[index]?.key;
+    if (key !== 'menschlich' && key !== 'agileKi') return 0;
+
+    const snap = this.svgSnapshot().prozesse[index];
+    if (!snap) return 0;
+    const rollen = this.getRollen(key);
+    return snap.works.reduce((summe, min, i) => (rollen[i] ? summe : summe + min), 0);
+  }
+
+  /**
+   * Note under Pie B (REQ-107). Always states that only steps with a role count;
+   * adds the excluded amount whenever role-less steps carry more than 0 minutes.
+   */
+  getRollenPieNote(index: number): string {
+    const basis = 'Summe = nur Arbeitszeit. Nur Schritte mit Rolle zählen.';
+    const ohneRolle = this.getUnassignedWorkMinutes(index);
+    return ohneRolle > 0 ? `${basis} Ohne Rolle: ${minutenZuDauer(ohneRolle)}.` : basis;
+  }
+
   /** Per-box data for the flowchart view; the last step has no following wait. */
   getFlowchartSchritte(
     index: number,
   ): { nr: number; label: string; work: number; wait: number | null }[] {
     const snap = this.svgSnapshot().prozesse[index];
-    const labels = this.prozesse[index]?.labels ?? [];
     if (!snap) return [];
     return snap.works.map((work, i) => ({
       nr: i + 1,
-      label: labels[i] ?? `Schritt ${i + 1}`,
+      // Name read site 3/6: the step's own live name, not the seed label constant.
+      label: this.getStepNameByProzessIndex(index, i),
       work,
       wait: i < snap.waits.length ? snap.waits[i] : null,
     }));
