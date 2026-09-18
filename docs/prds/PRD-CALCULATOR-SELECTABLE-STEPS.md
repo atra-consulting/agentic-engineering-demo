@@ -105,6 +105,18 @@ Acceptance:
 - When steps without a role carry more than 0 minutes of work, the note also names that amount, for example "Ohne Rolle: 30 Min.". A user can then reconcile the role pie against the work-vs-wait pie by hand.
 - The role pie never shows a slice for a role that no step carries, and never shows a total larger than the process's work time.
 
+**[REQ-108] A user can pick each step's role directly, on both agile processes.**
+Priority: High.
+Reason: A user testing the calculator noticed a newly added step has no way to get a role at all — the "no role" default (REQ-105) is a dead end with no path forward. Resolves Open Questions 6 and 7 below: yes to a per-step role picker, and yes, existing steps' roles become editable too, not just new ones — a picker that only worked on new steps would leave the 19/19 existing steps looking inconsistent with no way to change a mis-set role either.
+Acceptance:
+- Every step row on "Agile mit Menschen" and "Agile mit KI" — existing steps and newly added ones alike — carries a role picker with four choices: "— Keine —" (no role), "BA", "Dev", "Tester". The two KI-only processes never show a picker; they have no role concept.
+- The picker reflects the step's current role, including "— Keine —" for a role-less step (the default on a new step, or on an existing step the user cleared).
+- Changing the picker updates that step's role immediately — the role pie (REQ-107) and its "Ohne Rolle" note recompute right away, no save/reload needed.
+- The picker carries an accessible name identifying the step, e.g. "Rolle für Schritt 5".
+- Picking a role never changes any duration, name, or total.
+- Roles stay per process, same as before: changing a role on "Agile mit Menschen" never touches "Agile mit KI".
+- Consistent with REQ-303: roles are still never persisted to a saved scenario — a picked role lives only in the browser for that session (same lifetime as an added-but-unsaved step), exactly like the rest of the unsaved-changes behavior described in Open Question 10.
+
 **[REQ-106] Sensible limits.**
 Priority: Medium.
 Reason: The page must not break on an empty or absurd process.
@@ -176,8 +188,8 @@ The requirements above state working defaults. They are firm enough to build aga
 3. **Minimum step count.** Recommended floor is 1 step. Confirm — an alternative reading is 2 (a trigger plus at least one real step), which matches how every example process is built today.
 4. **Maximum step count.** Recommended cap is 50 per process. Any number works technically; confirm the cap, because it also becomes a server-side validation rule.
 5. **New-step name.** Recommended default is "Neuer Schritt", because the row already prints the position number and a stored "Schritt 20" would go stale after a removal. Confirm this over the literal "Schritt N".
-6. **Role for a new step (agile processes only).** Recommended default is no role, with the role pie naming the excluded amount (REQ-107). The alternatives are: copy the role of the step above, add a fourth "Ohne Rolle" slice to the pie, or add a per-step role picker (bigger scope, also affects the saved scenario). Which?
-7. **Editing roles at all.** Should existing steps' roles become editable, or stay fixed as today? This PRD assumes they stay fixed.
+6. **RESOLVED — Role for a new step (agile processes only).** A user testing the calculator found the "no role, no way to set one" default confusing on a freshly added step. Decision: add a per-step role picker (REQ-108) rather than only naming the excluded amount in the pie's note. REQ-107's note stays as a safety net for whatever is still role-less at any moment, but a user is no longer stuck there.
+7. **RESOLVED — Editing roles at all.** Yes — the same picker from REQ-108 applies to existing steps too, not just new ones. A picker that only worked on new steps would look inconsistent against the 19/19 steps that already have roles, and would give no way to fix a role someone got wrong.
 8. **Saving step names (REQ-302).** Recommended to include, because without it the rename feature loses its value on reload. It adds a field to the scenario payload and its validation. Confirm, or explicitly defer to a follow-up.
 9. **Reset to defaults.** With editable steps, an explicit "Zurücksetzen" action becomes more useful. Today the only way back is loading the "Standard-Szenario". In scope or not?
 10. **Unsaved-changes warning.** Added steps live only in the browser until a scenario is saved; a page reload drops them. Is a warning on leaving the page wanted, or is silent loss acceptable for a demo page?
@@ -188,7 +200,6 @@ These are deliberately not part of this change. Each maps to an Open Question ab
 
 - **Reordering or dragging existing steps.** Order is set by the order steps were created. See Open Question 2.
 - **Inserting a step anywhere but the end.** Append only. See Open Question 1.
-- **Editing the role of an existing step** on the two agile processes. Roles come from the example data and stay put. See Open Questions 6 and 7.
 - **A "Zurücksetzen" button.** Loading the "Standard-Szenario" already restores the example values. See Open Question 9.
 - **An unsaved-changes warning** when leaving the page. See Open Question 10.
 - **Any database change.** No new table, column or constraint. See REQ-303.
@@ -300,6 +311,7 @@ Note for the test author: totals and bar segments recompute through a 150 ms deb
 4. A user can rename any step, and the new name appears in the chart tooltips, the flow diagram and the screen-reader text — not only in the input field. (REQ-103)
 5. The tab caption's step number matches the number of step rows actually shown, at all times. (REQ-104)
 6. A newly added step on an agile process has no role, is excluded from the role pie, and the role pie's note names the excluded work minutes so the two pies reconcile. (REQ-105, REQ-107)
+6a. A user can pick a role for any step — new or existing — on the two agile processes via a per-step picker, and the role pie updates immediately. (REQ-108)
 7. At 1 step the remove action is blocked with a visible reason; at 50 steps the add action is blocked with a visible reason; both stay reachable by keyboard. (REQ-106)
 8. A scenario saved with a changed step count loads back with exactly that step count, and its agile role state matches that length. (REQ-301)
 9. A scenario with unusable data for one process still loads the other three, with no error thrown. (REQ-301)

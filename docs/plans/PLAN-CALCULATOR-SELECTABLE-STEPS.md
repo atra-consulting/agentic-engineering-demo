@@ -202,6 +202,28 @@ Six build slices. The backend slice replaces the fixed-length Zod rules in `back
 
 ---
 
+### 6b. Frontend — per-step role picker (added mid-implementation, REQ-108)
+**Agent:** fe-coder
+**Model:** sonnet — well-specified UI control on top of role state Groups 3/4/6 already built
+
+Added after a user, watching the running app during implementation, found that a newly added step has no way to get a role at all. Resolved PRD Open Questions 6 and 7: add a picker, and make it apply to existing steps too (not just new ones), since a picker limited to new steps would look inconsistent against the 19/19 existing steps and give no way to fix a wrong role.
+
+- [ ] Add a role `<select>` to every step row on "Agile mit Menschen" and "Agile mit KI" only (the two KI-only processes have no role concept — no picker there). Four options: "— Keine —" (no role), "BA", "Dev", "Tester".
+- [ ] Read the current value from `getRollen(prozessKey)[index]` (existing primitive from Group 3); on `(change)`, write directly into that same live array (`getRollen(prozessKey)[index] = newValue`) — mutate in place, same pattern Group 4 already uses for `push`/`splice` on this array. No FormControl needed; a plain bound `<select>` with `(change)` is enough, matching how `addStep`/`removeStep` already trigger change detection without going through the reactive form.
+- [ ] `aria-label` naming the step, e.g. "Rolle für Schritt 5".
+- [ ] Position: after the unit select, before "Entfernen" — extend the existing settled row order rather than inserting in the middle of it.
+- [ ] Changing a role must NOT touch any duration, name, or total, and must NOT cross between `menschlich`/`agileKi` (separate live arrays, already guaranteed by Group 3's per-process seeding).
+- [ ] `getRollenSplit()`/`getRollenPieNote()` (existing, Group 3) already read `getRollen()` live — confirm the pie and its note update on the very next render after a picker change, with no extra wiring needed.
+- [ ] Roles stay unpersisted, per REQ-303 — do not add anything to `formZuPayload()` for this.
+
+**Acceptance**
+- Every step row on the two agile tabs — old and new steps alike — shows the picker with the step's actual current role selected.
+- Picking a role updates the role pie and its note on the same render, no save/reload.
+- The two KI-only tabs show no picker.
+- Existing add/remove/rename/save/load behavior (Groups 3, 4, 6) is unaffected — this only adds a new control and a new write path into an already-existing array.
+
+---
+
 ### 7. Backend review
 **Agent:** be-reviewer
 **Model:** sonnet — focused review of one schema file and its error contract
@@ -229,6 +251,7 @@ Six build slices. The backend slice replaces the fixed-length Zod rules in `back
 - [ ] Confirm the **scenario-load** resize path uses the same wiring and teardown primitives — not a bare push or remove-at. Plain add/remove being clean says nothing about the load path.
 - [ ] Confirm the scenario loader rebuilds rather than patches, and re-derives roles from a fresh copy.
 - [ ] Confirm Angular 21 conventions: `inject()`, `@if`/`@for` with `track`, standalone imports, no `*ngIf`/`*ngFor`.
+- [ ] Confirm the role picker (Group 6b) mutates `getRollen()`'s live array directly and never appears on the two KI-only processes.
 
 ---
 
@@ -246,6 +269,7 @@ Six build slices. The backend slice replaces the fixed-length Zod rules in `back
 - [ ] Focus targets after add and after remove, in all three removal cases.
 - [ ] 0-minute step visible and focusable in the Balken view; a zero-total process still shows a bar.
 - [ ] Role pie note explains the exclusion and names the excluded minutes when there are any.
+- [ ] Role picker (Group 6b): accessible name per step, keyboard-operable, visually consistent with the other select (unit dropdown) in the row, absent on the two KI-only tabs.
 
 ---
 
@@ -306,6 +330,7 @@ Every existing negative test stays negative, so the suite would still go green i
 - [ ] Scenario load with 0 steps, a mismatched wait count, over the cap, or a missing process falls back to defaults for that process only and does not throw.
 - [ ] Scenario load does not leave the shared default label and role constants altered.
 - [ ] The save payload carries the current non-default counts and the names.
+- [ ] Role picker (Group 6b): shows the step's current role including "— Keine —"; changing it updates the role pie and note on the same render; never appears on the two KI-only tabs; never crosses between the two agile processes; changing a role does not touch duration/name/totals; roles are not included in the save payload.
 - [ ] **In `svg-util.spec.ts`:** `computeSegments()` gives a 0-minute work segment the 3-unit floor while non-zero segments keep correct relative proportions; wait segments at 0 minutes stay at 0 width; a zero total yields equal-width work segments instead of an empty bar; 50 zero-minute steps stay inside the 150-unit reserve.
 
 ---
