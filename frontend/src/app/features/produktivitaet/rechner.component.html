@@ -3,6 +3,17 @@
   <p class="text-muted mb-0">Vier Wege, ein Ziel — vergleiche Arbeitszeit, Wartezeit und Rollen.</p>
 </div>
 
+<!-- Disclosure note (REQ-201): always visible, real text in the reading order, not
+     dismissible, no auto-hide — a new static pattern, distinct from the dismissible
+     NotificationComponent. Stays the first content block on a narrow viewport and wraps
+     rather than collapsing, truncating, or moving below the charts. -->
+<div class="disclosure-note mb-4">
+  <p class="mb-0">
+    Die gezeigten Zeiten sind Beispielwerte. Du kannst jeden Wert ändern und in jedem
+    Prozess Schritte hinzufügen oder entfernen.
+  </p>
+</div>
+
 <!-- Wiederverwendbarer Prozessbalken; ns = eindeutiges ID-Präfix für aria-Attribute; showTitle=false unterdrückt die eigene Titel/Summe-Zeile, wenn ein Aufrufer sie schon selbst rendert. -->
 <ng-template #procBar let-prozessIdx let-ns="ns" let-showTitle="showTitle">
   <div class="process-bar-wrap">
@@ -389,12 +400,25 @@
             <form [formGroup]="form" class="mt-4" id="form-{{ p.key }}" tabindex="-1">
               <div [formGroupName]="p.key">
                 @for (ctrl of getWorksArray(p.key).controls; track $index) {
-                  <!-- Work step row -->
+                  <!--
+                    Work step row — fixed element order (settled markup for Group 3/4 to bind
+                    into): number prefix → name input → Arbeitszeit caption → value input →
+                    unit select → "Entfernen". The name input is placeholder/inert markup
+                    ([value] one-way bind to the seed label, no FormControl yet) until a later
+                    group wires it to the step's own form data. "Entfernen" is inert (no click
+                    handler yet); its blocked state at the 1-step floor (aria-disabled, see the
+                    [aria-disabled='true'] style below) is also wired later.
+                  -->
                   <div class="mb-2">
                     <div class="step-row">
-                      <span class="step-label fw-semibold">
-                        {{ $index + 1 }}. {{ p.labels[$index] }}
-                      </span>
+                      <span class="step-number fw-semibold">{{ $index + 1 }}.</span>
+                      <input
+                        type="text"
+                        class="form-control step-name-input"
+                        [value]="p.labels[$index]"
+                        maxlength="200"
+                        [attr.aria-label]="'Name für Schritt ' + ($index + 1)"
+                      />
                       <span class="text-muted small">{{ p.arbeitszeitLabel }}:</span>
                       <input
                         type="number"
@@ -414,6 +438,13 @@
                           <option [value]="einheit">{{ einheit }}</option>
                         }
                       </select>
+                      <button
+                        type="button"
+                        class="btn btn-outline-danger step-remove-btn"
+                        [attr.aria-label]="'Schritt ' + ($index + 1) + ' entfernen'"
+                      >
+                        Entfernen
+                      </button>
                       @if (getValueCtrl(ctrl).invalid && getValueCtrl(ctrl).touched) {
                         <div [id]="p.key + '-work-err-' + $index" class="text-danger small">
                           Wert muss zwischen 0 und {{ getValueMax(ctrl).toLocaleString('de-DE') }} liegen.
@@ -422,7 +453,7 @@
                     </div>
                   </div>
 
-                  <!-- Wait row after this step (only if not last) -->
+                  <!-- Wait row after this step (only if not last) — shape, indentation and left border untouched -->
                   @if ($index < getWaitsArray(p.key).controls.length) {
                     <div class="mb-2">
                       <div class="wait-row">
@@ -454,6 +485,22 @@
                     </div>
                   }
                 }
+
+                <!--
+                  "Schritt hinzufügen": placeholder control below the last step row of this
+                  process (REQ-101). Inert for now — a later group wires the click handler and
+                  the 50-step-cap blocked state (aria-disabled, see the [aria-disabled='true']
+                  style below, plus a persistently visible .step-limit-reason text next to it).
+                -->
+                <div class="step-actions mt-3">
+                  <button
+                    type="button"
+                    class="btn btn-outline-primary step-add-btn"
+                    [attr.aria-label]="'Schritt hinzufügen zu ' + p.titel"
+                  >
+                    Schritt hinzufügen
+                  </button>
+                </div>
               </div>
             </form>
           </ng-template>

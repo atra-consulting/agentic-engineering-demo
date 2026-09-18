@@ -87,9 +87,60 @@ function baueInitialeProzessDaten(): Record<ProzessKey, ProzessSnapshot> {
         gap: 0.5rem;
         flex-wrap: wrap;
       }
-      .step-label {
-        flex: 1;
-        min-width: 200px;
+      .step-number {
+        flex: 0 0 auto;
+        min-width: 1.5rem;
+      }
+      .step-name-input {
+        flex: 1 1 220px;
+        min-width: 180px;
+        min-height: 44px;
+      }
+      .step-remove-btn,
+      .step-add-btn {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 0.5rem 1rem;
+        white-space: nowrap;
+      }
+      .step-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+      /* Blocked-state reason text (REQ-106): sits next to its control and stays visible —
+         never a tooltip, never hover-only. #495057 instead of .text-muted/$secondary
+         (#777777, ~4.48:1, see docs/specs/SPECS-ui.md) — #495057 clears the 4.5:1 bar at
+         ~8.2:1 and is already used in this component for .bar-total/.pie-note/.cmp-col-header.
+         A later group renders this conditionally next to a blocked "Schritt hinzufügen" /
+         "Entfernen" control. */
+      .step-limit-reason {
+        font-size: 0.85rem;
+        color: #495057;
+      }
+      /* Blocked-state control (REQ-106): the real HTML disabled attribute is never used here —
+         the control must stay keyboard-focusable when blocked, so it carries
+         aria-disabled="true" instead. Muted look + not-allowed cursor, visually consistent
+         with .step-limit-reason above; the focus ring stays exactly as visible as on an
+         active control. */
+      .btn[aria-disabled='true'] {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn[aria-disabled='true']:focus-visible {
+        outline: 3px solid #264892;
+        outline-offset: 2px;
+      }
+      /* Disclosure note (REQ-201): always-visible informational banner — a new static
+         pattern, not the dismissible NotificationComponent. #495057 instead of
+         .text-muted/$secondary for the same contrast reason as .step-limit-reason above. */
+      .disclosure-note {
+        background: #eef3ff;
+        border: 1px solid #d7e0f5;
+        border-radius: 0.5rem;
+        padding: 0.75rem 1rem;
+        color: #495057;
       }
       .wait-row {
         display: flex;
