@@ -211,7 +211,7 @@ Added after a user, watching the running app during implementation, found that a
 - [ ] Add a role `<select>` to every step row on "Agile mit Menschen" and "Agile mit KI" only (the two KI-only processes have no role concept — no picker there). Four options: "— Keine —" (no role), "BA", "Dev", "Tester".
 - [ ] Read the current value from `getRollen(prozessKey)[index]` (existing primitive from Group 3); on `(change)`, write directly into that same live array (`getRollen(prozessKey)[index] = newValue`) — mutate in place, same pattern Group 4 already uses for `push`/`splice` on this array. No FormControl needed; a plain bound `<select>` with `(change)` is enough, matching how `addStep`/`removeStep` already trigger change detection without going through the reactive form.
 - [ ] `aria-label` naming the step, e.g. "Rolle für Schritt 5".
-- [ ] Position: after the unit select, before "Entfernen" — extend the existing settled row order rather than inserting in the middle of it.
+- [ ] Position: **updated mid-implementation per direct user request** — after the name input, before the Arbeitszeit caption/value/unit group (not after the unit select as originally planned). Final row order: number prefix → name input → role picker (agile only) → Arbeitszeit caption → value input → unit select → "Entfernen".
 - [ ] Changing a role must NOT touch any duration, name, or total, and must NOT cross between `menschlich`/`agileKi` (separate live arrays, already guaranteed by Group 3's per-process seeding).
 - [ ] `getRollenSplit()`/`getRollenPieNote()` (existing, Group 3) already read `getRollen()` live — confirm the pie and its note update on the very next render after a picker change, with no extra wiring needed.
 - [ ] Roles stay unpersisted, per REQ-303 — do not add anything to `formZuPayload()` for this.
@@ -263,7 +263,7 @@ Added after a user, watching the running app during implementation, found that a
 - [ ] Confirm neither the note nor the blocked-state text uses `.text-muted` / `#777777`, which misses 4.5:1.
 - [ ] Add, remove and name controls: accessible names, 44-pixel targets, text-not-icon convention.
 - [ ] Blocked states: still focusable, marked with `aria-disabled`, visually distinct from an active control, reason visible as text and not hover-only.
-- [ ] **Tab order through the extended step row** — number prefix, name input, value, unit, remove — reads in the order a sighted user scans it, with no jumps.
+- [ ] **Tab order through the extended step row** — number prefix, name input, role picker (agile tabs only), value, unit, remove — reads in the order a sighted user scans it, with no jumps. (Order updated mid-implementation per direct user request — role picker moved next to the name, not after the unit select.)
 - [ ] **Focus indicator on minimum-width bar segments.** The existing focus outline was sized for normal segments. Check it stays visible and distinguishable on a 3-unit marker, and across a run of adjacent 0-minute markers, including a fully-zero 50-step process.
 - [ ] Live region: polite, correct text, does not steal focus.
 - [ ] Focus targets after add and after remove, in all three removal cases.
