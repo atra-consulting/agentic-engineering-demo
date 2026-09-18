@@ -19,6 +19,7 @@ import {
 } from '@angular/forms';
 import { FormsModule } from '@angular/forms';
 import { NgbModal, NgbNavChangeEvent, NgbNavModule, NgbTooltipModule } from '@ng-bootstrap/ng-bootstrap';
+import { Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import {
   DEFAULT_DURATIONS,
@@ -58,6 +59,13 @@ type AgileProzessKey = (typeof AGILE_KEYS)[number];
 
 /** A step name holds at most 200 characters (REQ-103), mirrored by the backend. */
 const MAX_NAME_LAENGE = 200;
+
+/** Sensible limits per process (REQ-106): floor 1 step, cap 50 steps. */
+const MIN_STEPS = 1;
+const MAX_STEPS = 50;
+
+/** Default name for a step created via "Schritt hinzufügen" (REQ-103). */
+const NEUER_SCHRITT_NAME = 'Neuer Schritt';
 
 interface ProzessSnapshot {
   works: number[];
@@ -675,6 +683,28 @@ export class RechnerComponent implements OnInit {
   private letzteEinheit = new Map<FormControl<ZeitEinheit>, ZeitEinheit>();
 
   /**
+   * The unit-conversion subscription for each step group's unit control, keyed the
+   * same way as letzteEinheit. wireUnitConversion() ties every subscription to
+   * takeUntilDestroyed(this.destroyRef) — i.e. the COMPONENT's lifetime, not the
+   * control's — so a removed step's subscription would otherwise outlive its
+   * control for the rest of the page session. teardownStepControl() unsubscribes
+   * early and deletes both map entries when a step or wait is removed.
+   */
+  private einheitSubscriptions = new Map<FormControl<ZeitEinheit>, Subscription>();
+
+  /**
+   * One polite live-region message per process (REQ-104). Set after every add/remove
+   * via announce(); read by the template's aria-live="polite" span. Never steals
+   * focus — only a screen reader announcement.
+   */
+  private liveRegionSignal = signal<Record<ProzessKey, string>>(
+    PROZESSE.reduce((acc, p) => {
+      acc[p.key] = '';
+      return acc;
+    }, {} as Record<ProzessKey, string>),
+  );
+
+  /**
    * Live per-step role state for the two agile processes (REQ-107). Seeded ONCE per
    * process by copying PROZESS_ROLLEN (see seedRollenAusDefaults); from then on a
    * step's role travels with the step and is looked up by the step's CURRENT index,
@@ -772,15 +802,37 @@ export class RechnerComponent implements OnInit {
   }
 
   private baueSchrittArray(minutes: number[], names?: string[]): FormGroup[] {
-    return minutes.map((min, i) => {
-      const group = this.fb.group({
-        value: [min, durationValidatorsFor('Minuten')],
-        unit: ['Minuten'],
-        ...(names ? { name: [names[i] ?? '', [Validators.maxLength(MAX_NAME_LAENGE)]] } : {}),
-      });
-      this.wireUnitConversion(group);
-      return group;
+    return minutes.map((min, i) =>
+      names ? this.buildAndWireWorkStep(min, names[i] ?? '') : this.buildAndWireWaitStep(min),
+    );
+  }
+
+  /**
+   * Builds one work step's FormGroup (value, unit, name) and wires its unit
+   * conversion, exactly like every step baueSchrittArray() builds at init time.
+   * Reused by addStep() and — per the plan — by Group 6's scenario-load resize.
+   */
+  private buildAndWireWorkStep(minutes: number, name: string): FormGroup {
+    const group = this.fb.group({
+      value: [minutes, durationValidatorsFor('Minuten')],
+      unit: ['Minuten'],
+      name: [name, [Validators.maxLength(MAX_NAME_LAENGE)]],
     });
+    this.wireUnitConversion(group);
+    return group;
+  }
+
+  /**
+   * Builds one wait step's FormGroup (value, unit — no name control, waits are not
+   * steps) and wires its unit conversion. Reused by addStep() and Group 6.
+   */
+  private buildAndWireWaitStep(minutes: number): FormGroup {
+    const group = this.fb.group({
+      value: [minutes, durationValidatorsFor('Minuten')],
+      unit: ['Minuten'],
+    });
+    this.wireUnitConversion(group);
+    return group;
   }
 
   /**
@@ -789,6 +841,9 @@ export class RechnerComponent implements OnInit {
    * (keyed by control instance) rather than derived from RxJS emission history —
    * patchSchritt's silent {emitEvent:false} reset during a scenario load never fires
    * valueChanges, so a pairwise buffer would go stale and mislabel the loaded value.
+   * The returned Subscription is also tied to takeUntilDestroyed (safety net for the
+   * component's own teardown) AND stored in einheitSubscriptions, so a step's own
+   * removal can unsubscribe it early — see teardownStepControl().
    */
   private wireUnitConversion(group: FormGroup): void {
     const unitCtrl = group.get('unit') as FormControl<ZeitEinheit>;
@@ -796,7 +851,7 @@ export class RechnerComponent implements OnInit {
 
     this.letzteEinheit.set(unitCtrl, unitCtrl.value);
 
-    unitCtrl.valueChanges
+    const sub = unitCtrl.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((cur) => {
         const prev = this.letzteEinheit.get(unitCtrl) ?? unitCtrl.value;
@@ -811,6 +866,23 @@ export class RechnerComponent implements OnInit {
         valueCtrl.setValidators(durationValidatorsFor(cur));
         valueCtrl.updateValueAndValidity();
       });
+    this.einheitSubscriptions.set(unitCtrl, sub);
+  }
+
+  /**
+   * Tears down a removed step group's unit-conversion wiring: unsubscribes its
+   * live subscription early (it would otherwise outlive the control, tied only to
+   * the component's own destroyRef) and deletes both map entries keyed by its unit
+   * control. Call this for the removed work step AND, when one is removed, the
+   * removed wait — BEFORE (or immediately after) the control leaves the FormArray,
+   * while it is still reachable. Reused by removeStep() and, per the plan, by
+   * Group 6's scenario-load resize when shrinking a process.
+   */
+  private teardownStepControl(group: FormGroup): void {
+    const unitCtrl = group.get('unit') as FormControl<ZeitEinheit>;
+    this.einheitSubscriptions.get(unitCtrl)?.unsubscribe();
+    this.einheitSubscriptions.delete(unitCtrl);
+    this.letzteEinheit.delete(unitCtrl);
   }
 
   private berechne(val: ReturnType<FormGroup['getRawValue']>): void {
@@ -921,6 +993,135 @@ export class RechnerComponent implements OnInit {
   getWaitValueMax(prozessKey: ProzessKey, index: number): number {
     const unit = (this.getWaitUnitCtrl(prozessKey, index).value as ZeitEinheit) ?? 'Minuten';
     return maxWertFuerEinheit(unit);
+  }
+
+  // ── Add / remove steps (REQ-101, REQ-102, REQ-105, REQ-106) ──
+
+  /** True once this process is at the floor — the remove control must stay blocked. */
+  isRemoveBlocked(prozessKey: ProzessKey): boolean {
+    return this.getLiveStepCount(prozessKey) <= MIN_STEPS;
+  }
+
+  /** True once this process is at the cap — the add control must stay blocked. */
+  isAddBlocked(prozessKey: ProzessKey): boolean {
+    return this.getLiveStepCount(prozessKey) >= MAX_STEPS;
+  }
+
+  /**
+   * Appends one work step (0 minutes, "Neuer Schritt") and one wait (0 minutes)
+   * after the previous last step (REQ-101). On the two agile processes also
+   * appends an empty role, keeping the role array exactly as long as the works
+   * array (REQ-105/REQ-107) — skipping this desyncs the two arrays on the very
+   * next removal. Never re-derives roles via seedRollenAusDefaults().
+   */
+  addStep(prozessKey: ProzessKey): void {
+    // Guards the aria-disabled control itself, in case a blocked click still reaches here.
+    if (this.isAddBlocked(prozessKey)) return;
+
+    this.getWorksArray(prozessKey).push(this.buildAndWireWorkStep(0, NEUER_SCHRITT_NAME));
+    this.getWaitsArray(prozessKey).push(this.buildAndWireWaitStep(0));
+
+    if (prozessKey === 'menschlich' || prozessKey === 'agileKi') {
+      this.getRollen(prozessKey).push(null);
+    }
+
+    this.announce(prozessKey, 'hinzugefügt');
+    this.focusNewStepName(prozessKey);
+  }
+
+  /**
+   * Removes the step at `index` plus exactly one wait, per the REQ-102 rule: if
+   * `index` is not the last step, the wait AFTER it goes (the wait before it
+   * survives and now separates the two new neighbours); if `index` IS the last
+   * step, the wait BEFORE it goes (the last step has no wait of its own). Tears
+   * down the unit-conversion wiring for both removed controls before they leave
+   * their FormArrays. On the two agile processes, drops exactly that step's role
+   * (splice never shifts the wrong entries).
+   */
+  removeStep(prozessKey: ProzessKey, index: number): void {
+    // Guards the aria-disabled control itself, in case a blocked click still reaches here.
+    if (this.isRemoveBlocked(prozessKey)) return;
+
+    const worksArray = this.getWorksArray(prozessKey);
+    const waitsArray = this.getWaitsArray(prozessKey);
+    const isLast = index === worksArray.length - 1;
+    const waitIndexToRemove = isLast ? index - 1 : index;
+
+    // Teardown BEFORE removal, while the controls are still reachable by index.
+    this.teardownStepControl(this.asFormGroup(worksArray.at(index)));
+    const waitGroup = waitsArray.at(waitIndexToRemove);
+    if (waitGroup) {
+      this.teardownStepControl(this.asFormGroup(waitGroup));
+    }
+
+    worksArray.removeAt(index);
+    if (waitIndexToRemove >= 0 && waitIndexToRemove < waitsArray.length) {
+      waitsArray.removeAt(waitIndexToRemove);
+    }
+
+    if (prozessKey === 'menschlich' || prozessKey === 'agileKi') {
+      this.getRollen(prozessKey).splice(index, 1);
+    }
+
+    this.announce(prozessKey, 'entfernt');
+    this.focusAfterRemove(prozessKey, index, isLast);
+  }
+
+  /** Current live-region text for a process's Schritt-Zeiten form (REQ-104). */
+  getLiveRegionText(prozessKey: ProzessKey): string {
+    return this.liveRegionSignal()[prozessKey] ?? '';
+  }
+
+  /** Sets the polite live-region announcement, stating the action and the NEW count. */
+  private announce(prozessKey: ProzessKey, action: 'hinzugefügt' | 'entfernt'): void {
+    const count = this.getLiveStepCount(prozessKey);
+    const text = `Schritt ${action}, jetzt ${count} Schritte`;
+    this.liveRegionSignal.update((cur) => ({ ...cur, [prozessKey]: text }));
+  }
+
+  /**
+   * Moves focus into the newly-added step's name input, text ready to overwrite
+   * (REQ-101). No existing focus-management precedent elsewhere in this component
+   * (Technical Note 11 — the only FormArray in the app), so this uses a plain
+   * setTimeout(0): the triggering (click) handler runs inside NgZone, whose
+   * zone-patched change detection flushes synchronously once that handler returns
+   * — before the browser reaches the next macrotask — so by the time this
+   * setTimeout callback runs, the new row's DOM already exists. ngbNav only
+   * renders the ACTIVE tab's pane, so querying within #form-<key> always finds
+   * exactly this process's rows.
+   */
+  private focusNewStepName(prozessKey: ProzessKey): void {
+    setTimeout(() => {
+      const formEl = this.document.getElementById('form-' + prozessKey);
+      const inputs = formEl?.querySelectorAll<HTMLInputElement>('.step-name-input');
+      const last = inputs && inputs.length > 0 ? inputs[inputs.length - 1] : null;
+      last?.focus();
+      last?.select();
+    });
+  }
+
+  /**
+   * Focus after a removal (REQ-102), scheduled the same way as focusNewStepName():
+   * - Floor reached (1 step left, no further removal possible): "Schritt hinzufügen".
+   * - Removed step was the last one: the remove action of the new last step, now at
+   *   `removedIndex - 1`.
+   * - Otherwise: the remove action of the step that shifted up into the removed
+   *   step's former position, still at `removedIndex`.
+   */
+  private focusAfterRemove(prozessKey: ProzessKey, removedIndex: number, wasLast: boolean): void {
+    setTimeout(() => {
+      const formEl = this.document.getElementById('form-' + prozessKey);
+      if (!formEl) return;
+
+      if (this.isRemoveBlocked(prozessKey)) {
+        formEl.querySelector<HTMLButtonElement>('.step-add-btn')?.focus();
+        return;
+      }
+
+      const buttons = formEl.querySelectorAll<HTMLButtonElement>('.step-remove-btn');
+      const targetIndex = wasLast ? removedIndex - 1 : removedIndex;
+      buttons[targetIndex]?.focus();
+    });
   }
 
   // Scenario CRUD

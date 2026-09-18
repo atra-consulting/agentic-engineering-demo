@@ -413,6 +413,11 @@
 
             <form [formGroup]="form" class="mt-4" id="form-{{ p.key }}" tabindex="-1">
               <div [formGroupName]="p.key">
+                <!-- Live region (REQ-104): one per process, polite, announces the action plus
+                     the NEW step count after every add/remove. Visually hidden; never steals
+                     focus — aria-live doesn't move focus and nothing here calls .focus(). -->
+                <span class="visually-hidden" aria-live="polite" aria-atomic="true">{{ getLiveRegionText(p.key) }}</span>
+
                 @for (ctrl of getWorksArray(p.key).controls; track $index) {
                   <!--
                     Work step row — fixed element order: number prefix → name input →
@@ -422,9 +427,10 @@
                     and shows up in the tooltips, the bar's spoken label and the flow
                     diagram too — all of them read getStepName(), which falls back to
                     "Schritt N" from the step's CURRENT position when the name is empty.
-                    "Entfernen" is still inert (no click handler yet); its blocked state at
-                    the 1-step floor (aria-disabled, see the [aria-disabled='true'] style)
-                    is wired later.
+                    "Entfernen" removes this step (REQ-102) and stays focusable-but-blocked
+                    at the 1-step floor via aria-disabled (never the native disabled
+                    attribute, see the [aria-disabled='true'] style), with a persistently
+                    visible reason next to it.
                   -->
                   <div class="mb-2">
                     <div class="step-row">
@@ -462,9 +468,14 @@
                         type="button"
                         class="btn btn-outline-danger step-remove-btn"
                         [attr.aria-label]="'Schritt ' + ($index + 1) + ' entfernen'"
+                        [attr.aria-disabled]="isRemoveBlocked(p.key) ? 'true' : null"
+                        (click)="removeStep(p.key, $index)"
                       >
                         Entfernen
                       </button>
+                      @if (isRemoveBlocked(p.key)) {
+                        <span class="step-limit-reason">Mindestens 1 Schritt erforderlich.</span>
+                      }
                       @if (getValueCtrl(ctrl).invalid && getValueCtrl(ctrl).touched) {
                         <div [id]="p.key + '-work-err-' + $index" class="text-danger small">
                           Wert muss zwischen 0 und {{ getValueMax(ctrl).toLocaleString('de-DE') }} liegen.
@@ -507,19 +518,24 @@
                 }
 
                 <!--
-                  "Schritt hinzufügen": placeholder control below the last step row of this
-                  process (REQ-101). Inert for now — a later group wires the click handler and
-                  the 50-step-cap blocked state (aria-disabled, see the [aria-disabled='true']
-                  style below, plus a persistently visible .step-limit-reason text next to it).
+                  "Schritt hinzufügen": appends one step + one wait at the end of this
+                  process (REQ-101). Stays focusable-but-blocked at the 50-step cap via
+                  aria-disabled (never the native disabled attribute, see the
+                  [aria-disabled='true'] style), with a persistently visible reason next to it.
                 -->
                 <div class="step-actions mt-3">
                   <button
                     type="button"
                     class="btn btn-outline-primary step-add-btn"
                     [attr.aria-label]="'Schritt hinzufügen zu ' + p.titel"
+                    [attr.aria-disabled]="isAddBlocked(p.key) ? 'true' : null"
+                    (click)="addStep(p.key)"
                   >
                     Schritt hinzufügen
                   </button>
+                  @if (isAddBlocked(p.key)) {
+                    <span class="step-limit-reason">Maximal 50 Schritte erreicht.</span>
+                  }
                 </div>
               </div>
             </form>
