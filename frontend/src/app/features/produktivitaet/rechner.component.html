@@ -410,8 +410,8 @@
                 @for (ctrl of getWorksArray(p.key).controls; track $index) {
                   <!--
                     Work step row — fixed element order: number prefix → name input →
-                    Arbeitszeit caption → value input → unit select → role picker
-                    (agile processes only, REQ-108) → "Entfernen".
+                    role picker (agile processes only, REQ-108) → Arbeitszeit caption →
+                    value input → unit select → "Entfernen".
                     The name input is bound to the step's OWN 'name' FormControl (seeded
                     from a copy of the example labels), so a rename travels with the step
                     and shows up in the tooltips, the bar's spoken label and the flow
@@ -433,6 +433,22 @@
                         maxlength="200"
                         [attr.aria-label]="'Name für Schritt ' + ($index + 1)"
                       />
+                      <!-- Per-step role picker (REQ-108), agile processes only. Plain component
+                           state, not a FormControl — reads/writes the live array getRollen()
+                           already returns, same direct-mutation pattern as addStep/removeStep. -->
+                      @if (showsRollen(p.key)) {
+                        <select
+                          class="form-select w-auto"
+                          [value]="getStepRole(p.key, $index) ?? ''"
+                          (change)="setStepRole(p.key, $index, $any($event.target).value)"
+                          [attr.aria-label]="'Rolle für Schritt ' + ($index + 1)"
+                        >
+                          <option value="">— Keine —</option>
+                          <option value="BA">BA</option>
+                          <option value="Dev">Dev</option>
+                          <option value="Tester">Tester</option>
+                        </select>
+                      }
                       <span class="text-muted small">{{ p.arbeitszeitLabel }}:</span>
                       <!-- Name read site 5/6: the value input's spoken label. -->
                       <input
@@ -454,22 +470,6 @@
                           <option [value]="einheit">{{ einheit }}</option>
                         }
                       </select>
-                      <!-- Per-step role picker (REQ-108), agile processes only. Plain component
-                           state, not a FormControl — reads/writes the live array getRollen()
-                           already returns, same direct-mutation pattern as addStep/removeStep. -->
-                      @if (showsRollen(p.key)) {
-                        <select
-                          class="form-select w-auto"
-                          [value]="getStepRole(p.key, $index) ?? ''"
-                          (change)="setStepRole(p.key, $index, $any($event.target).value)"
-                          [attr.aria-label]="'Rolle für Schritt ' + ($index + 1)"
-                        >
-                          <option value="">— Keine —</option>
-                          <option value="BA">BA</option>
-                          <option value="Dev">Dev</option>
-                          <option value="Tester">Tester</option>
-                        </select>
-                      }
                       <button
                         type="button"
                         class="btn btn-outline-danger step-remove-btn"
