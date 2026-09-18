@@ -1147,15 +1147,19 @@ export class RechnerComponent implements OnInit {
     for (const p of PROZESSE) {
       const feld = PROZESS_SZENARIO_FELD[p.key];
       const stored: ProzessDauer | undefined = s[feld];
-      // Still gated on the DEFAULT step count, and still a patch rather than a
-      // rebuild: a scenario with a different step count is rejected here today.
-      // Deliberately left alone by the dynamic-step-model foundation — the
-      // structural check (1..50 steps, waits === works - 1), the array rebuild and
-      // the role/name re-derivation on load land together in their own change.
-      const quelle =
-        stored && stored.works.length === p.stepCount ? stored : DEFAULT_DURATIONS[p.key];
-      this.patchProzessArray(p.key, quelle.works, quelle.waits);
+      // Structural check only (REQ-301/REQ-106): 1..50 works, waits === works - 1.
+      // Independent per process — one bad process falls back to its own example
+      // values without touching the other three (istGueltigeProzessDauer()).
+      const quelle = this.istGueltigeProzessDauer(stored) ? stored : DEFAULT_DURATIONS[p.key];
+      this.rebuildProzessArray(p.key, quelle.works, quelle.waits, quelle.names);
     }
+
+    // Roles are never stored in a scenario. Re-derive both agile processes' role
+    // state fresh from PROZESS_ROLLEN, sized to each process's now-final works
+    // length — must run AFTER every process above has been resized, since it reads
+    // the live works-array length. Reuses Group 3's exact primitive (copy, never
+    // mutate the shared constant) rather than re-implementing it here.
+    this.seedRollenAusDefaults();
 
     // The {emitEvent:false} patches above suppress form.valueChanges → berechne(),
     // so recompute explicitly. Required for the tabs/bars/pies to reflect the load.
@@ -1164,9 +1168,70 @@ export class RechnerComponent implements OnInit {
     this.viewModeSignal.set('balken');
   }
 
-  private patchProzessArray(key: ProzessKey, works: number[], waits: number[]): void {
+  /**
+   * Structural validity check for one process's stored scenario data (REQ-301,
+   * REQ-106): at least MIN_STEPS and at most MAX_STEPS works, and exactly
+   * `works.length - 1` waits — the same floor/cap/shape that bounds a live
+   * add/remove. Deliberately does NOT look at `names` — a missing or
+   * length-mismatched name list means "ignore the names", not "reject the whole
+   * process" (handled separately by rebuildProzessArray()'s own naming fallback).
+   */
+  private istGueltigeProzessDauer(stored: ProzessDauer | undefined): stored is ProzessDauer {
+    if (!stored) return false;
+    const workCount = stored.works?.length ?? 0;
+    if (workCount < MIN_STEPS || workCount > MAX_STEPS) return false;
+    return (stored.waits?.length ?? -1) === workCount - 1;
+  }
+
+  /**
+   * Rebuilds one process's works/waits FormArrays to the given (already-validated)
+   * lengths, then patches every step's value/unit/name — replacing the old
+   * patch-by-index approach that silently no-op'd past the existing array length
+   * (Technical Note 6). Growing reuses buildAndWireWorkStep()/buildAndWireWaitStep(),
+   * the exact same unit-conversion wiring addStep() uses; shrinking calls
+   * teardownStepControl() BEFORE removal, the exact same order removeStep() uses —
+   * so a scenario load never leaks a discarded control's unit-conversion
+   * subscription or its letzteEinheit/einheitSubscriptions map entries
+   * (Technical Note 7). Reused for every load, valid or fallen-back.
+   *
+   * Names: `names[i]` when the caller's `names` array is present and matches
+   * `works.length`; otherwise seeded from PROZESS_STEP_LABELS[key][i] — a COPY,
+   * never the shared live reference (Technical Note 4) — falling back to '' beyond
+   * the seed data (renders as "Schritt N" via getStepName()'s own fallback).
+   */
+  private rebuildProzessArray(
+    key: ProzessKey,
+    works: number[],
+    waits: number[],
+    names: string[] | undefined,
+  ): void {
     const worksArray = this.getWorksArray(key);
     const waitsArray = this.getWaitsArray(key);
+    const labels = PROZESS_STEP_LABELS[key];
+    const namesGueltig = names !== undefined && names.length === works.length;
+
+    // {emitEvent:false} on every resize call, not just the value patches below: a
+    // plain push()/removeAt() defaults to emitEvent:true, which would queue a
+    // form.valueChanges emission carrying the PRE-patch state (the new step still
+    // at its placeholder 0) into the 150ms-debounced berechne() subscription. That
+    // stale call would then fire ~150ms after this method returns and silently
+    // overwrite the correct post-load snapshot with the pre-patch one. Silencing
+    // resize the same way the value patches are silenced keeps the load atomic.
+    while (worksArray.length < works.length) {
+      worksArray.push(this.buildAndWireWorkStep(0, ''), { emitEvent: false });
+    }
+    while (worksArray.length > works.length) {
+      this.teardownStepControl(this.asFormGroup(worksArray.at(worksArray.length - 1)));
+      worksArray.removeAt(worksArray.length - 1, { emitEvent: false });
+    }
+
+    while (waitsArray.length < waits.length) {
+      waitsArray.push(this.buildAndWireWaitStep(0), { emitEvent: false });
+    }
+    while (waitsArray.length > waits.length) {
+      this.teardownStepControl(this.asFormGroup(waitsArray.at(waitsArray.length - 1)));
+      waitsArray.removeAt(waitsArray.length - 1, { emitEvent: false });
+    }
 
     const patchSchritt = (ctrl: AbstractControl | null, min: number) => {
       if (!ctrl) return;
@@ -1183,7 +1248,14 @@ export class RechnerComponent implements OnInit {
       this.letzteEinheit.set(unitCtrl, 'Minuten');
     };
 
-    works.forEach((min, i) => patchSchritt(worksArray.at(i), min));
+    works.forEach((min, i) => {
+      const ctrl = worksArray.at(i);
+      patchSchritt(ctrl, min);
+      if (ctrl) {
+        const name = namesGueltig ? names![i] ?? '' : labels[i] ?? '';
+        this.getNameCtrl(ctrl).patchValue(name, { emitEvent: false });
+      }
+    });
     waits.forEach((min, i) => patchSchritt(waitsArray.at(i), min));
   }
 
@@ -1194,9 +1266,18 @@ export class RechnerComponent implements OnInit {
     const val = this.form.value;
     const steps = {} as Record<SzenarioProzessFeld, ProzessDauer>;
     for (const p of PROZESSE) {
+      const workGroups = val[p.key].works as Array<{
+        value: number;
+        unit: ZeitEinheit;
+        name?: string;
+      }>;
       steps[PROZESS_SZENARIO_FELD[p.key]] = {
-        works: toMinutesArr(val[p.key].works),
+        works: toMinutesArr(workGroups),
         waits: toMinutesArr(val[p.key].waits),
+        // The raw control value, NOT getStepName()'s "Schritt N" fallback — that
+        // fallback is a display concern computed from position. Baking it into the
+        // payload would freeze stale positional text into a later load.
+        names: workGroups.map((w) => w.name ?? ''),
       };
     }
 

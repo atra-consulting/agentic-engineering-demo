@@ -3,6 +3,10 @@ import { ProzessKey } from './prozess-defaults';
 export interface ProzessDauer {
   works: number[];
   waits: number[];
+  /** Step names, one per work step, in step order. Optional: absent on a scenario
+   *  saved before REQ-302 shipped, and on a malformed/legacy load the loader falls
+   *  back to the example names — see rechner.component.ts's rebuildProzessArray(). */
+  names?: string[];
 }
 
 export interface Szenario {
