@@ -366,3 +366,27 @@ Note for the test author: totals and bar segments recompute through a 150 ms deb
 14. **The seed test proves nothing about validation.** The only test touching the default scenario reads it back with a GET. Reads never run through the request validator. Backward compatibility with the legacy 19/19/11/2 shape must be proven with a POST and a PUT.
 
 15. **The recompute is debounced by 150 ms.** Form changes flow through a debounce before totals and segments update. Frontend tests that assert a total straight after an add or remove must account for it. The scenario loader already works around this by suppressing events during the patch and recomputing once at the end — keep that behaviour when the loader starts resizing arrays.
+
+## Implementierung
+
+Branch: `calculator-selectable-steps-rechner-ui`.
+
+Commits:
+- `26be84e` docs: Initialize state tracking for CALCULATOR-SELECTABLE-STEPS
+- `cd8c633` docs: Add specifications (PRD) for calculator selectable steps
+- `4b37f71` docs: Add detailed plan for calculator selectable steps
+- `3089c6e` feat: Replace fixed step-count validation with structural rules
+- `15b37c1` feat: Add disclosure banner and step-row control styles
+- `97caafa` feat: Make step name and role live per-step state
+- `aa05ef3` feat: Add step add/remove with role parity, focus and cleanup
+- `501363c` feat: Give 0-minute bar segments a minimum visible, focusable width
+- `19211b8` feat: Rebuild scenario load to variable step counts and persist names
+- `730a7f8` docs: Resolve PRD Open Questions 6/7, add per-step role picker (REQ-108)
+- `a947607` feat: Add per-step role picker for the two agile processes
+- `a7cfd24` fix: Move role picker before the working-time fields
+- `0e9623e` docs: Update plan's row-order text to match user-requested role-picker position
+- `24bd6f4` fix: Fix SVG focus indicator, wire aria-describedby, fix Schritt/Schritte grammar
+- `b67e8f7` test: Rewrite backend szenario tests for variable step counts
+- `90b1f27` test: Rewrite frontend specs for selectable steps and role picker
+
+PR: not yet opened. Add the link here once the pull request from `calculator-selectable-steps-rechner-ui` against `main` exists.
