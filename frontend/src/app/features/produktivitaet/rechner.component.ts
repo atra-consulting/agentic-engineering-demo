@@ -1064,7 +1064,7 @@ export class RechnerComponent implements OnInit {
     this.getWorksArray(prozessKey).push(this.buildAndWireWorkStep(0, NEUER_SCHRITT_NAME));
     this.getWaitsArray(prozessKey).push(this.buildAndWireWaitStep(0));
 
-    if (prozessKey === 'menschlich' || prozessKey === 'agileKi') {
+    if (this.showsRollen(prozessKey)) {
       this.getRollen(prozessKey).push(null);
     }
 
@@ -1102,7 +1102,7 @@ export class RechnerComponent implements OnInit {
       waitsArray.removeAt(waitIndexToRemove);
     }
 
-    if (prozessKey === 'menschlich' || prozessKey === 'agileKi') {
+    if (this.showsRollen(prozessKey)) {
       this.getRollen(prozessKey).splice(index, 1);
     }
 
