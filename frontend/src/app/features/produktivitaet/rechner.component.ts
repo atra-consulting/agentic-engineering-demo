@@ -973,6 +973,37 @@ export class RechnerComponent implements OnInit {
     return this.prozessRollen.get(prozessKey as AgileProzessKey) ?? [];
   }
 
+  /**
+   * True for the two agile processes (menschlich, agileKi) — the only ones with a
+   * role concept. Gates the per-step role picker (REQ-108); the two KI-only
+   * processes (halbautomatisch, vollautomatisch) never render it.
+   */
+  showsRollen(prozessKey: ProzessKey): boolean {
+    return prozessKey === 'menschlich' || prozessKey === 'agileKi';
+  }
+
+  /**
+   * The step's current role (REQ-108), read live off the same array getRollen()
+   * already returns — never re-derived, never cached. Safe to call for the two
+   * KI-only processes too (returns null via getRollen()'s empty-array fallback),
+   * though the template only calls this where showsRollen() is true.
+   */
+  getStepRole(prozessKey: ProzessKey, index: number): Rolle | null {
+    return this.getRollen(prozessKey)[index] ?? null;
+  }
+
+  /**
+   * Writes a step's role directly into the live array (REQ-108) — the same direct
+   * mutation Group 4's addStep()/removeStep() already use for push/splice. No
+   * FormControl involved: roles are plain component state, not part of the
+   * reactive form, and stay unpersisted (REQ-303) — formZuPayload() never reads
+   * this array. `value` is the raw string from the <select>'s (change) event.
+   */
+  setStepRole(prozessKey: ProzessKey, index: number, value: string): void {
+    const parsed: Rolle | null = value === '' ? null : (value as Rolle);
+    this.getRollen(prozessKey)[index] = parsed;
+  }
+
   /** Current max allowed value for a step group's value input — depends on its own unit. */
   getValueMax(ctrl: AbstractControl): number {
     const unit = (this.getUnitCtrl(ctrl).value as ZeitEinheit) ?? 'Minuten';
