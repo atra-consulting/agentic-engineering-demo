@@ -1,4 +1,4 @@
-[← README](../../README.md) · [1 Vollautomatisch](01-vollautomatisch.md) · [2 Halbautomatisch: Erfolg](02-halbautomatisch-erfolg.md) · **3 Halbautomatisch: scheitert**
+[← README](../../README.MD) · [1 Vollautomatisch](01-vollautomatisch.md) · [2 Halbautomatisch: Erfolg](02-halbautomatisch-erfolg.md) · **3 Halbautomatisch: scheitert**
 
 # Walkthrough 3: Halbautomatisch — wenn die Anforderung zu vage ist
 
@@ -17,7 +17,7 @@ Anders als in [Walkthrough 2](02-halbautomatisch-erfolg.md) endet dieser Lauf
 
 - App läuft: `./start.sh` (Frontend <http://localhost:7200>, Backend <http://localhost:7070>).
 - `backend/.env` enthält `AGENT_API_TOKEN` und `AGENT_AUTH_ALLOW_LOOPBACK=1`.
-  Details: [Voraussetzung: `backend/.env` für die headless Skills](../../README.md#voraussetzung-backendenv-für-die-headless-skills).
+  Details: [Voraussetzung: `backend/.env` für die headless Skills](../../README.MD#voraussetzung-backendenv-für-die-headless-skills).
 - Du bist als `admin` / `admin123` im Frontend eingeloggt. Ticket-Aktionen
   brauchen Admin-Rechte.
 - Du stehst lokal auf `main`, Arbeitsverzeichnis sauber (`git status`).

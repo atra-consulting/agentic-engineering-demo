@@ -23,12 +23,27 @@
 
 ---
 
+## Demo-Walkthroughs
+
+Drei fertige Schritt-für-Schritt-Anleitungen zeigen die Software Factory live — vom Feedback bis zum fertigen Feature.
+
+| # | Walkthrough | Zeigt |
+|---|-------------|-------|
+| 1 | [Vollautomatisch](docs/walkthroughs/01-vollautomatisch.md) | `/do-fully-automatic 10` baut ein fertig spezifiziertes Ticket ohne jede Rückfrage. |
+| 2 | [Halbautomatisch: Erfolg](docs/walkthroughs/02-halbautomatisch-erfolg.md) | `/write-ticket 18` schreibt ein Ticket aus Feedback. Ein Mensch gibt es mit „Nach Bereit" frei. `/do-semi-automatic` baut es. |
+| 3 | [Halbautomatisch: scheitert](docs/walkthroughs/03-halbautomatisch-scheitert.md) | `/write-ticket 4` erzeugt ein vages Ticket. `/do-semi-automatic` baut es nicht, sondern gibt es mit Rückfragen zurück. |
+
+Hintergrund zur Pipeline: [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md).
+
+---
+
 ## Training
 
 atra.consulting [bietet KI-Training an](https://atra.consulting/ki-loesungen/), inklusive zweier Hands-on-Training-Workshops für Agenten-basierte Entwicklung.
 
 ## Inhalt
 
+- [Demo-Walkthroughs](#demo-walkthroughs)
 - [Voraussetzungen](#voraussetzungen)
 - [Schnellstart](#schnellstart)
 - [Demo-Login](#demo-login)

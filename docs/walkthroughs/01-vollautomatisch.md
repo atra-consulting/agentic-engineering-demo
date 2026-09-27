@@ -1,4 +1,4 @@
-[← README](../../README.md) · **1 Vollautomatisch** · [2 Halbautomatisch: Erfolg](02-halbautomatisch-erfolg.md) · [3 Halbautomatisch: scheitert](03-halbautomatisch-scheitert.md)
+[← README](../../README.MD) · **1 Vollautomatisch** · [2 Halbautomatisch: Erfolg](02-halbautomatisch-erfolg.md) · [3 Halbautomatisch: scheitert](03-halbautomatisch-scheitert.md)
 
 # Walkthrough 1: Vollautomatisch — Ticket #10 ohne Rückfrage bauen
 
@@ -13,7 +13,7 @@ Du startest einen Skill. Der Skill prüft das Ticket, baut das Feature, testet e
 ## Voraussetzungen
 
 - App läuft: `./start.sh`. Frontend unter <http://localhost:7200>, Backend unter <http://localhost:7070>.
-- `backend/.env` mit Agent-Token gesetzt. Details: [README → Voraussetzung: backend/.env für die headless Skills](../../README.md#voraussetzung-backendenv-für-die-headless-skills). Fehlt die Datei, legt `./start.sh` sie automatisch aus dem Beispiel an.
+- `backend/.env` mit Agent-Token gesetzt. Details: [README → Voraussetzung: backend/.env für die headless Skills](../../README.MD#voraussetzung-backendenv-für-die-headless-skills). Fehlt die Datei, legt `./start.sh` sie automatisch aus dem Beispiel an.
 - Ein Login-Account. Jeder reicht: `admin`/`admin123`, `user`/`test123` oder `demo`/`demo1234`. Das Board sieht jeder eingeloggte Nutzer.
 - Repo steht auf Branch `main`. Kein offener Stand (`git status` zeigt „clean").
 - Claude Code läuft im Repo-Root — dort rufst du den Skill auf.
@@ -75,7 +75,7 @@ Du startest einen Skill. Der Skill prüft das Ticket, baut das Feature, testet e
 - Chancen-Liste **und** Chancen-Detailseite zeigen die Phase als farbigen Badge.
 - Ein neuer lokaler Git-Branch mit den Commits liegt vor. Nichts wurde gepusht, kein PR ist offen.
 
-Der Skill läuft auch ganz ohne Claude Code im Vordergrund — headless, z. B. in CI. Der dafür dokumentierte Aufruf: `claude -p "/project:do-fully-automatic 10"`. Details zur headless-Form und zum nötigen `backend/.env`: [README → Voraussetzung: backend/.env für die headless Skills](../../README.md#voraussetzung-backendenv-für-die-headless-skills).
+Der Skill läuft auch ganz ohne Claude Code im Vordergrund — headless, z. B. in CI. Der dafür dokumentierte Aufruf: `claude -p "/project:do-fully-automatic 10"`. Details zur headless-Form und zum nötigen `backend/.env`: [README → Voraussetzung: backend/.env für die headless Skills](../../README.MD#voraussetzung-backendenv-für-die-headless-skills).
 
 ## Zurücksetzen
 

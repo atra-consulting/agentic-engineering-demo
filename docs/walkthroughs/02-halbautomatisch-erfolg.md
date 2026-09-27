@@ -1,4 +1,4 @@
-[← README](../../README.md) · [1 Vollautomatisch](01-vollautomatisch.md) · **2 Halbautomatisch: Erfolg** · [3 Halbautomatisch: scheitert](03-halbautomatisch-scheitert.md)
+[← README](../../README.MD) · [1 Vollautomatisch](01-vollautomatisch.md) · **2 Halbautomatisch: Erfolg** · [3 Halbautomatisch: scheitert](03-halbautomatisch-scheitert.md)
 
 # Walkthrough 2: Halbautomatisch — vom Feedback zum fertigen Feature
 
@@ -14,8 +14,8 @@ die KI baut. Der Klick auf **„Nach Bereit"** ist die Freigabe.
 ## Voraussetzungen
 
 - App läuft: `./start.sh` (Backend Port 7070, Frontend Port 7200).
-- `backend/.env` ist eingerichtet. Siehe [README → Voraussetzung: backend/.env](../../README.md#voraussetzung-backendenv-für-die-headless-skills).
-- Du bist als Admin eingeloggt (`admin` / `admin123`). Login-Daten: [README → Demo-Login](../../README.md#demo-login).
+- `backend/.env` ist eingerichtet. Siehe [README → Voraussetzung: backend/.env](../../README.MD#voraussetzung-backendenv-für-die-headless-skills).
+- Du bist als Admin eingeloggt (`admin` / `admin123`). Login-Daten: [README → Demo-Login](../../README.MD#demo-login).
 - Dein Git-Arbeitsverzeichnis ist sauber und steht auf `main`. `plan-and-do` legt einen neuen Branch nur von `main` aus an. Falls nicht: erst committen oder stashen.
 - Aufgabe #18 in der Feedback-Queue steht auf Status `OPEN`. Frisch installiert ist das automatisch so. Lief dieses Walkthrough schon einmal, setz erst zurück (siehe [Zurücksetzen](#zurücksetzen)).
 
@@ -165,4 +165,4 @@ Nach einem Durchlauf stehen Tickets und Feedback-Items nicht mehr im Ausgangszus
 - Skill-Ablauf Schritt für Schritt:
   [.claude/skills/write-ticket/SKILL.md](../../.claude/skills/write-ticket/SKILL.md) ·
   [.claude/skills/do-semi-automatic/SKILL.md](../../.claude/skills/do-semi-automatic/SKILL.md)
-- Alle Skills und Subagents im Überblick: [README → Die Skills](../../README.md#die-skills)
+- Alle Skills und Subagents im Überblick: [README → Die Skills](../../README.MD#die-skills)
