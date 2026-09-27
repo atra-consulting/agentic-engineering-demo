@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "task_key": "DEMO-WALKTHROUGHS",
+  "status": "in_progress",
+  "current_step": "4.5",
+  "started": "2026-09-27T00:00:00Z",
+  "updated": "2026-09-27T00:00:00Z",
+  "config": {
+    "input_mode": "freeform",
+    "user_description": "Document three step-by-step demo walkthroughs in MD files, prominently linked from README.md: (1) /do-fully-automatic 10, (2) /write-ticket 18 then /do-semi-automatic 13 (success with approval), (3) /write-ticket 4 then /do-semi-automatic 14 (fails: unclear requirements). Inspiration: ~/Downloads/Agent Factory (written for atra-consulting/coding-with-ai-lab).",
+    "special_instructions": null,
+    "ticket_mode": false,
+    "ticket_id": null,
+    "ticket_url": null,
+    "ticket_api_base": null,
+    "ticket_claimed": false,
+    "branch_name": "demo-walkthroughs-skill-demos",
+    "original_branch": "main",
+    "original_head": "854b506cd6620b7b08cbf2c2eabe8c486f8a33e5",
+    "docs_folder": "docs",
+    "is_git_repo": true,
+    "workflow_scope": null,
+    "pr_prefix": null,
+    "pr_exists": false,
+    "pr_url": null,
+    "keep_settings": {
+      "prd": "always",
+      "plan": "always",
+      "review": "always",
+      "state": "never"
+    },
+    "keep_files": null,
+    "open_md_setting": "always",
+    "auto_open_md": true
+  },
+  "discovery": {
+    "agents_available": false,
+    "planner_agents": [],
+    "writer_agents": [],
+    "coding_agents": [],
+    "review_agents": [],
+    "test_coding_agents": [],
+    "test_review_agents": [],
+    "test_runner_agents": [],
+    "tooling_coding_agents": [],
+    "tooling_review_agents": [],
+    "test_command": null
+  },
+  "artifacts": {
+    "prd_skipped": null,
+    "prd_file": null,
+    "plan_file": null
+  },
+  "delegation": {
+    "assignments": [],
+    "escalations": []
+  },
+  "completed_steps": []
+}
