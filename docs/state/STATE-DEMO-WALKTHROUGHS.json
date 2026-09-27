@@ -2,7 +2,7 @@
   "version": 1,
   "task_key": "DEMO-WALKTHROUGHS",
   "status": "in_progress",
-  "current_step": "4.5",
+  "current_step": "7.6",
   "started": "2026-09-27T00:00:00Z",
   "updated": "2026-09-27T00:00:00Z",
   "config": {
@@ -19,8 +19,8 @@
     "original_head": "854b506cd6620b7b08cbf2c2eabe8c486f8a33e5",
     "docs_folder": "docs",
     "is_git_repo": true,
-    "workflow_scope": null,
-    "pr_prefix": null,
+    "workflow_scope": "full",
+    "pr_prefix": "feat:",
     "pr_exists": false,
     "pr_url": null,
     "keep_settings": {
@@ -29,30 +29,87 @@
       "review": "always",
       "state": "never"
     },
-    "keep_files": null,
+    "keep_files": {
+      "plan": true,
+      "review": true,
+      "state": false
+    },
     "open_md_setting": "always",
     "auto_open_md": true
   },
   "discovery": {
-    "agents_available": false,
-    "planner_agents": [],
-    "writer_agents": [],
-    "coding_agents": [],
-    "review_agents": [],
-    "test_coding_agents": [],
-    "test_review_agents": [],
-    "test_runner_agents": [],
-    "tooling_coding_agents": [],
-    "tooling_review_agents": [],
-    "test_command": null
+    "agents_available": true,
+    "planner_agents": [
+      "planner"
+    ],
+    "writer_agents": [
+      "ba-writer",
+      "data-writer"
+    ],
+    "coding_agents": [
+      "be-coder",
+      "db-coder",
+      "fe-coder",
+      "ui-designer"
+    ],
+    "review_agents": [
+      "ba-reviewer",
+      "requirements-reviewer",
+      "be-reviewer",
+      "db-reviewer",
+      "fe-reviewer",
+      "ui-reviewer"
+    ],
+    "test_coding_agents": [
+      "be-test-coder",
+      "fe-test-coder"
+    ],
+    "test_review_agents": [
+      "be-test-reviewer",
+      "fe-test-reviewer"
+    ],
+    "test_runner_agents": [
+      "be-test-runner",
+      "fe-test-runner"
+    ],
+    "tooling_coding_agents": [
+      "python-coder",
+      "shell-coder",
+      "skill-coder"
+    ],
+    "tooling_review_agents": [
+      "python-reviewer",
+      "shell-reviewer",
+      "skill-reviewer"
+    ],
+    "test_command": "cd backend && npm test / cd frontend && npx ng test --watch=false"
   },
   "artifacts": {
-    "prd_skipped": null,
+    "prd_skipped": true,
     "prd_file": null,
-    "plan_file": null
+    "plan_file": "docs/plans/PLAN-DEMO-WALKTHROUGHS.md"
   },
   "delegation": {
-    "assignments": [],
+    "assignments": [
+      {
+        "step": "Plan draft",
+        "agent": "planner",
+        "model": "sonnet",
+        "verified_by": "orchestrator spot-check"
+      },
+      {
+        "step": "Plan review: ba-reviewer",
+        "agent": "ba-reviewer",
+        "model": "haiku",
+        "verified_by": "orchestrator"
+      },
+      {
+        "step": "Plan fix",
+        "agent": "direct",
+        "model": "n/a",
+        "verified_by": "no fixes needed; one clarification added"
+      }
+    ],
     "escalations": []
   },
   "completed_steps": []
