@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_key": "DEMO-WALKTHROUGHS",
-  "status": "in_progress",
-  "current_step": "7.6",
+  "status": "completed",
+  "current_step": "13.2",
   "started": "2026-09-27T00:00:00Z",
   "updated": "2026-09-27T00:00:00Z",
   "config": {
@@ -108,6 +108,72 @@
         "agent": "direct",
         "model": "n/a",
         "verified_by": "no fixes needed; one clarification added"
+      },
+      {
+        "step": "Implementation: Walkthrough 1",
+        "agent": "ba-writer",
+        "model": "sonnet",
+        "verified_by": "diff read + reviewer"
+      },
+      {
+        "step": "Implementation: Walkthrough 2",
+        "agent": "ba-writer",
+        "model": "sonnet",
+        "verified_by": "diff read + reviewer"
+      },
+      {
+        "step": "Implementation: Walkthrough 3",
+        "agent": "ba-writer",
+        "model": "sonnet",
+        "verified_by": "diff read + reviewer"
+      },
+      {
+        "step": "Implementation: README integration",
+        "agent": "ba-writer",
+        "model": "haiku",
+        "verified_by": "diff read"
+      },
+      {
+        "step": "Phase 1 review: ba-reviewer",
+        "agent": "ba-reviewer",
+        "model": "sonnet",
+        "verified_by": "n/a"
+      },
+      {
+        "step": "Phase 1 fix",
+        "agent": "ba-writer",
+        "model": "haiku",
+        "verified_by": "diff read"
+      },
+      {
+        "step": "Testing: link check",
+        "agent": "direct",
+        "model": "n/a",
+        "verified_by": "script"
+      },
+      {
+        "step": "Review round 1: ba-reviewer",
+        "agent": "ba-reviewer",
+        "model": "sonnet",
+        "verified_by": "n/a"
+      },
+      {
+        "step": "Review fix: 01/02 walkthroughs",
+        "agent": "direct",
+        "model": "n/a",
+        "verified_by": "reviewer"
+      },
+      {
+        "step": "Review round 2: ba-reviewer",
+        "agent": "ba-reviewer",
+        "model": "haiku",
+        "verified_by": "n/a"
+      },
+      {
+        "step": "Post-review testing: link check",
+        "agent": "direct",
+        "model": "n/a",
+        "verified_by": "script"
       }
     ],
     "escalations": []
