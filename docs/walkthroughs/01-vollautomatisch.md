@@ -74,7 +74,7 @@ Du startest einen Skill. Der Skill prüft das Ticket, baut das Feature, testet e
 - Ticket #10 steht auf dem Board in Spalte „Erledigt", `solution=DONE`.
 - Der Kommentar-Thread des Tickets dokumentiert jeden Schritt: Claim, Fertigstellung.
 - Chancen-Liste **und** Chancen-Detailseite zeigen die Phase als farbigen Badge.
-- Ein neuer lokaler Git-Branch mit den Commits liegt vor. Nichts wurde gepusht, kein PR ist offen.
+- Ein neuer lokaler Git-Branch mit den Commits liegt vor. Der Skill pusht nichts und öffnet keinen PR.
 
 Der Skill läuft auch ganz ohne Claude Code im Vordergrund — headless, z. B. in CI. Der Aufruf folgt demselben Muster wie `/do-semi-automatic` in CI: `claude -p "/project:do-fully-automatic 10"`. Details zur headless-Form und zum nötigen `backend/.env`: [README → Voraussetzung: backend/.env für die headless Skills](../../README.MD#voraussetzung-backendenv-für-die-headless-skills).
 

@@ -102,8 +102,8 @@ die KI baut. Der Klick auf **„Nach Bereit"** ist die Freigabe.
    - Der Skill claimt das Ticket (Status → **In Arbeit**) und hinterlässt
      einen kurzen Kommentar dazu.
    - Er ruft `/plan-and-do` auf — mit fest vorgegebenen Antworten für jeden
-     Checkpoint: PRD wird übersprungen, der Plan gilt automatisch als
-     freigegeben, jeder Review-Befund wird automatisch übernommen. **Kein
+     Checkpoint: Er überspringt das PRD, der Plan gilt automatisch als
+     freigegeben, er übernimmt jeden Review-Befund automatisch. **Kein
      einziger Checkpoint hält an. Die KI fragt zu keinem Zeitpunkt
      `AskUserQuestion`.**
    - Nach Build, Test und Review markiert der Skill das Ticket als erledigt.
