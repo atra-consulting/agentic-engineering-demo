@@ -63,6 +63,7 @@ Du startest einen Skill. Der Skill prüft das Ticket, baut das Feature, testet e
     - Du siehst: Spalte „Phase" zeigt jetzt einen farbigen Badge statt reinem Text.
     - Tu das: Eine Chance anklicken, z. B. <http://localhost:7200/chancen/1>.
     - Du siehst: Die Detailseite zeigt die Phase ebenfalls als farbigen Badge. Farben: NEU blau, QUALIFIZIERT hellblau, ANGEBOT gelb, VERHANDLUNG dunkelgrau, GEWONNEN grün, VERLOREN rot.
+    - Hinweis: Die Detailseite zeigt den farbigen Badge schon vor dem Lauf. Sichtbar ändert sich nur die Liste. Der Skill legt das Farb-Mapping aber an einer Stelle ab und nutzt es an beiden Stellen.
 
 11. **Git-Ergebnis prüfen.**
     - Tu das: `git branch` und `git log --oneline -5` ausführen.
@@ -75,14 +76,14 @@ Du startest einen Skill. Der Skill prüft das Ticket, baut das Feature, testet e
 - Chancen-Liste **und** Chancen-Detailseite zeigen die Phase als farbigen Badge.
 - Ein neuer lokaler Git-Branch mit den Commits liegt vor. Nichts wurde gepusht, kein PR ist offen.
 
-Der Skill läuft auch ganz ohne Claude Code im Vordergrund — headless, z. B. in CI. Der dafür dokumentierte Aufruf: `claude -p "/project:do-fully-automatic 10"`. Details zur headless-Form und zum nötigen `backend/.env`: [README → Voraussetzung: backend/.env für die headless Skills](../../README.MD#voraussetzung-backendenv-für-die-headless-skills).
+Der Skill läuft auch ganz ohne Claude Code im Vordergrund — headless, z. B. in CI. Der Aufruf folgt demselben Muster wie `/do-semi-automatic` in CI: `claude -p "/project:do-fully-automatic 10"`. Details zur headless-Form und zum nötigen `backend/.env`: [README → Voraussetzung: backend/.env für die headless Skills](../../README.MD#voraussetzung-backendenv-für-die-headless-skills).
 
 ## Zurücksetzen
 
 Nach einem Durchlauf stehen Tickets und Feedback-Items nicht mehr im Ausgangszustand. So setzt du zurück:
 
 - **Alles zurücksetzen (empfohlen):** App stoppen, dann `./start.sh --reset-db`. Das löscht die SQLite-Datenbank und legt sie mit den Seed-Daten neu an. Nur so starten neue Ticket-IDs wieder bei **13**.
-- **Nur Feedback-Items:** Auf `/admin/agent-tasks` den Button **„Zurücksetzen"** klicken. Tickets bleiben unverändert.
+- **Nur Feedback-Items:** Auf `/admin/agent-tasks` den Button **„Alle Aufgaben zurücksetzen"** klicken. Tickets bleiben unverändert.
 - **Nur Tickets:** Dafür gibt es keinen Button. Per `curl` als Admin anmelden und den Reset aufrufen:
 
   ```bash

@@ -140,7 +140,7 @@ die KI baut. Der Klick auf **„Nach Bereit"** ist die Freigabe.
 Nach einem Durchlauf stehen Tickets und Feedback-Items nicht mehr im Ausgangszustand. So setzt du zurück:
 
 - **Alles zurücksetzen (empfohlen):** App stoppen, dann `./start.sh --reset-db`. Das löscht die SQLite-Datenbank und legt sie mit den Seed-Daten neu an. Nur so starten neue Ticket-IDs wieder bei **13**.
-- **Nur Feedback-Items:** Auf `/admin/agent-tasks` den Button **„Zurücksetzen"** klicken. Tickets bleiben unverändert.
+- **Nur Feedback-Items:** Auf `/admin/agent-tasks` den Button **„Alle Aufgaben zurücksetzen"** klicken. Tickets bleiben unverändert.
 - **Nur Tickets:** Dafür gibt es keinen Button. Per `curl` als Admin anmelden und den Reset aufrufen:
 
   ```bash
