@@ -1,0 +1,27 @@
+name: goal-and-do-checks
+on:
+  pull_request:
+    paths:
+      - .claude-plugin/**
+      - plugins/goal-and-do/**
+      - dev/goal-and-do/**
+      - .github/workflows/goal-and-do-checks.yml
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    # Only pull requests from this repository, a read-only token, and no token left in .git.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The Claude Code version the plugin is built for.
+      - run: npm install -g @anthropic-ai/claude-code@2.1.316
+      - run: claude plugin validate .
+      - run: npm --prefix dev/goal-and-do ci --ignore-scripts
+      - run: npm --prefix dev/goal-and-do run check

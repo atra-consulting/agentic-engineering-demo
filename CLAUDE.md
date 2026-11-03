@@ -42,6 +42,12 @@ Agent files: `.claude/agents/`
 
 The `planner`, `python-*`, `shell-*`, `skill-*`, and `data-*` agents are general tooling agents — they are not bound to the CRM domain specs and instead read the root `CLAUDE.md` plus, for shell, `docs/specs/SPECS-infrastructure.md`.
 
+## Plugins
+
+| Plugin | Purpose | Path |
+|--------|---------|------|
+| goal-and-do | `/goal-and-do <ticket or text>` takes one change through six phases (Intent, Spec, Plan, Build, Test, PR) to a draft PR, with gates after Intent, Spec and Plan | `plugins/goal-and-do/` |
+
 ## Spec Reading Lists
 
 Each subagent in `.claude/agents/` has a `## Specifications` reading list naming its primary spec plus secondary specs. The two API-reference docs ([`SPEC-API-TASKS.md`](docs/specs/SPEC-API-TASKS.md), [`SPEC-API-TICKETS.md`](docs/specs/SPEC-API-TICKETS.md)) sit outside this convention. Spec overview: see [`AGENTS.md`](AGENTS.md).

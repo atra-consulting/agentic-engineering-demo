@@ -1,0 +1,19 @@
+{
+  "name": "goal-and-do-checks",
+  "private": true,
+  "description": "Checks for the goal-and-do plugin's own code: types, lint, format, Markdown, front matter, validate and tests",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "fix": "node scripts/check.mjs --fix"
+  },
+  "devDependencies": {
+    "eslint": "9.39.5",
+    "eslint-config-prettier": "10.1.8",
+    "markdownlint-cli2": "0.24.0",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1"
+  }
+}

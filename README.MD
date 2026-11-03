@@ -394,6 +394,19 @@ Läuft headless (`claude -p`). Kein Mensch antwortet. Baut nie Code.
 - Datei: `.claude/skills/write-ticket/SKILL.md`
 - Hintergrund: [docs/specs/SPEC-API-TASKS.md](docs/specs/SPEC-API-TASKS.md) · [docs/specs/SPEC-API-TICKETS.md](docs/specs/SPEC-API-TICKETS.md)
 
+#### goal-and-do
+
+`/goal-and-do <ticket or text>` takes one change through six phases (Intent, Spec, Plan, Build, Test, PR) to a draft pull request, with gates for a person after Intent, Spec and Plan.
+
+Install in Claude Code:
+
+```text
+/plugin marketplace add atra-consulting/agentic-engineering-demo
+/plugin install goal-and-do@agentic-engineering-demo
+```
+
+Details: [plugins/goal-and-do/README.md](plugins/goal-and-do/README.md)
+
 ### Skills und Subagents ins eigene Projekt übernehmen
 
 Du willst die Skills und Subagents aus diesem Repo in dein eigenes Projekt holen? So geht es.

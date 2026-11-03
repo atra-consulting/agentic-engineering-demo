@@ -1,0 +1,1 @@
+# Fingerprints the scanner ignores. Empty on purpose: a false positive is released through the allowlist in shapes.ts, approved by the code owner.

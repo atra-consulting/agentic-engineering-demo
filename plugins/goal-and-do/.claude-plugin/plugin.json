@@ -1,0 +1,6 @@
+{
+  "name": "goal-and-do",
+  "version": "0.9.1",
+  "description": "Prototype of the six phases (Intent, Spec, Plan, Build, Test, PR), each run as a /goal",
+  "types": "./types/index.d.ts"
+}

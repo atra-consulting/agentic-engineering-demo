@@ -1,0 +1,15 @@
+# Infrastructure failure patterns for the PR phase.
+#
+# A failed check whose log holds one of these lines (case-insensitive, the first match in list order) is not a failure of the
+# change: the phase starts no fix round, pushes no empty commit and lists the check under To Do as "re-run by hand", with the
+# matching line named.
+#
+# One entry per line. Blank lines and lines that start with # are skipped.
+# The plugin's code owner owns this list; it changes only by pull request. Keep an entry to a clear phrase: a log of an ordinary
+# test failure must not hold it.
+
+the runner has received a shutdown signal
+the hosted runner lost communication with the server
+no space left on device
+agent went offline during the build
+network timeout

@@ -1,0 +1,10 @@
+{
+  // Off: line length (one paragraph per line), table column style (padded tables rewrite a whole table on each edit),
+  // inline HTML (the skills' placeholders such as changes/<id>/ read as tags).
+  "config": {
+    "MD013": false,
+    "MD060": false,
+    "MD033": false,
+    "MD024": { "siblings_only": true }
+  }
+}

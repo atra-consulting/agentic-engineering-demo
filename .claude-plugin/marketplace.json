@@ -1,0 +1,17 @@
+{
+  "name": "agentic-engineering-demo",
+  "owner": {
+    "name": "atra consulting"
+  },
+  "metadata": {
+    "description": "Prototype for review, not for production code; includes a mod that pushes",
+    "version": "0.9.1"
+  },
+  "plugins": [
+    {
+      "name": "goal-and-do",
+      "source": "./plugins/goal-and-do",
+      "description": "Prototype for review: the six phases as /goal runs"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+title = "goal-and-do"
+
+# The scanner's own rules, with nothing from the scanned repository. The code owner approves each change to this file.
+[extend]
+useDefault = true
