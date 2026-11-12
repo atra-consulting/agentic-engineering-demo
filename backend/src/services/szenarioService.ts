@@ -5,6 +5,7 @@ import type { SzenarioCreateDTO } from '../utils/validation.js';
 export interface ProzessDauer {
   works: number[];
   waits: number[];
+  names?: string[];
 }
 
 export interface SzenarioDTO {

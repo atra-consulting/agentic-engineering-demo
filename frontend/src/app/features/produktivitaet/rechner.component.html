@@ -3,6 +3,17 @@
   <p class="text-muted mb-0">Vier Wege, ein Ziel — vergleiche Arbeitszeit, Wartezeit und Rollen.</p>
 </div>
 
+<!-- Disclosure note (REQ-201): always visible, real text in the reading order, not
+     dismissible, no auto-hide — a new static pattern, distinct from the dismissible
+     NotificationComponent. Stays the first content block on a narrow viewport and wraps
+     rather than collapsing, truncating, or moving below the charts. -->
+<div class="disclosure-note mb-4">
+  <p class="mb-0">
+    Die gezeigten Zeiten sind Beispielwerte. Du kannst jeden Wert ändern und in jedem
+    Prozess Schritte hinzufügen oder entfernen.
+  </p>
+</div>
+
 <!-- Wiederverwendbarer Prozessbalken; ns = eindeutiges ID-Präfix für aria-Attribute; showTitle=false unterdrückt die eigene Titel/Summe-Zeile, wenn ein Aufrufer sie schon selbst rendert. -->
 <ng-template #procBar let-prozessIdx let-ns="ns" let-showTitle="showTitle">
   <div class="process-bar-wrap">
@@ -23,9 +34,11 @@
       <title [id]="'bar-title-' + ns">
         {{ prozesse[prozessIdx].titel }}: {{ getProzessTotal(prozessIdx) | dauer }}
       </title>
+      <!-- Live step count, not the descriptor's initial stepCount — steps can be added/removed. -->
       <desc [id]="'bar-desc-' + ns">
         Prozessbalken für {{ prozesse[prozessIdx].titel }} mit
-        {{ prozesse[prozessIdx].stepCount }} Schritten. Gesamtdauer:
+        {{ getLiveStepCount(prozesse[prozessIdx].key) }}
+        {{ schritteWort(getLiveStepCount(prozesse[prozessIdx].key)) }}. Gesamtdauer:
         {{ getProzessTotal(prozessIdx) | dauer }}.
       </desc>
 
@@ -44,29 +57,27 @@
 
       @for (seg of getSegments(prozessIdx, 600); track seg.type + '-' + seg.index) {
         @if (seg.type === 'work') {
-          @if (svgSnapshot().prozesse[prozessIdx].works[seg.index] === 0) {
-            <rect
-              [attr.x]="seg.x"
-              y="0"
-              [attr.width]="seg.width"
-              height="32"
-              fill="#264892"
-              aria-hidden="true"
-            />
-          } @else {
-            <rect
-              class="seg-rect"
-              [attr.x]="seg.x"
-              y="0"
-              [attr.width]="seg.width"
-              height="32"
-              fill="#264892"
-              tabindex="0"
-              [attr.aria-label]="getWorkAriaLabel(prozessIdx, seg.index)"
-              [ngbTooltip]="getWorkAriaLabel(prozessIdx, seg.index)"
-              container="body"
-            />
-          }
+          <!--
+            Every work segment is focusable with its own spoken label, including a
+            0-minute step (e.g. the "Auslöser" trigger step) and any step newly added
+            at 0 minutes. This REVERSES an earlier deliberate decision that skipped
+            tabindex/aria-label/tooltip on 0-minute segments (the 0-min "Auslöser" step
+            was the only case then). REQ-104 requires every step to get a minimum-width
+            marker from computeSegments() and to be focusable, matching the flow-diagram
+            boxes. Do not re-add a 0-minute special case here.
+          -->
+          <rect
+            class="seg-rect"
+            [attr.x]="seg.x"
+            y="0"
+            [attr.width]="seg.width"
+            height="32"
+            fill="#264892"
+            tabindex="0"
+            [attr.aria-label]="getWorkAriaLabel(prozessIdx, seg.index)"
+            [ngbTooltip]="getWorkAriaLabel(prozessIdx, seg.index)"
+            container="body"
+          />
         } @else if (seg.width > 0) {
           <rect
             class="seg-rect"
@@ -275,7 +286,8 @@
     <ul ngbNav #nav="ngbNav" [(activeId)]="activeTab" (navChange)="onNavChange($event)" class="nav-tabs schritt-tabs mb-3">
       @for (p of prozesse; track p.key) {
         <li [ngbNavItem]="$index + 1">
-          <button ngbNavLink>{{ p.titel }} ({{ p.stepCount }})</button>
+          <!-- Live step count, not the descriptor's initial stepCount (REQ-104). -->
+          <button ngbNavLink>{{ p.titel }} ({{ getLiveStepCount(p.key) }})</button>
           <ng-template ngbNavContent>
             <a
               class="visually-hidden-focusable"
@@ -321,14 +333,17 @@
               <!--
                 Flowchart (5.5/R4): unlike #procBar above (which skips tabindex on 0-work
                 segments), EVERY box here gets tabindex="0" + its own aria-label, including
-                the 0-min "Auslöser" trigger step. This intentionally differs from the
+                the 0-min "Auslöser" trigger step. This intentionally differed from the
                 Balken bar — R4 requires per-box focusability; the NFR "same information"
                 is about content parity, not an identical tab-stop count.
+                A LATER CHANGE CLOSES THAT GAP from the other side: REQ-104 makes the bar's
+                0-minute segments focusable and labelled too (see the comment on that branch
+                in #procBar), so the two views will then have the same tab stops.
               -->
               <div
                 class="flow-scroll"
                 role="group"
-                [attr.aria-label]="'Ablaufdiagramm ' + p.titel + ', ' + p.stepCount + ' Schritte'"
+                [attr.aria-label]="'Ablaufdiagramm ' + p.titel + ', ' + getLiveStepCount(p.key) + ' ' + schritteWort(getLiveStepCount(p.key))"
               >
                 <div class="flow-track">
                   @for (schritt of getFlowchartSchritte($index); track schritt.nr) {
@@ -377,7 +392,7 @@
                   [ngTemplateOutletContext]="{
                     result: getPieBSlices($index),
                     caption: 'Arbeitsverteilung nach Rolle',
-                    note: 'Summe = nur Arbeitszeit',
+                    note: getRollenPieNote($index),
                     ns: p.key + '-b',
                     titleText: p.titel + ': Arbeitsverteilung nach Rolle',
                     descText: 'Kreisdiagramm Rollenverteilung nach BA, Dev und Tester für ' + p.titel
@@ -388,32 +403,88 @@
 
             <form [formGroup]="form" class="mt-4" id="form-{{ p.key }}" tabindex="-1">
               <div [formGroupName]="p.key">
+                <!-- Live region (REQ-104): one per process, polite, announces the action plus
+                     the NEW step count after every add/remove. Visually hidden; never steals
+                     focus — aria-live doesn't move focus and nothing here calls .focus(). -->
+                <span class="visually-hidden" aria-live="polite" aria-atomic="true">{{ getLiveRegionText(p.key) }}</span>
+
                 @for (ctrl of getWorksArray(p.key).controls; track $index) {
-                  <!-- Work step row -->
+                  <!--
+                    Work step row — fixed element order: number prefix → name input →
+                    role picker (agile processes only, REQ-108) → Arbeitszeit caption →
+                    value input → unit select → "Entfernen".
+                    The name input is bound to the step's OWN 'name' FormControl (seeded
+                    from a copy of the example labels), so a rename travels with the step
+                    and shows up in the tooltips, the bar's spoken label and the flow
+                    diagram too — all of them read getStepName(), which falls back to
+                    "Schritt N" from the step's CURRENT position when the name is empty.
+                    "Entfernen" removes this step (REQ-102) and stays focusable-but-blocked
+                    at the 1-step floor via aria-disabled (never the native disabled
+                    attribute, see the [aria-disabled='true'] style), with a persistently
+                    visible reason next to it.
+                  -->
                   <div class="mb-2">
                     <div class="step-row">
-                      <span class="step-label fw-semibold">
-                        {{ $index + 1 }}. {{ p.labels[$index] }}
-                      </span>
+                      <span class="step-number fw-semibold">{{ $index + 1 }}.</span>
+                      <!-- Name read site 4/6: the printed step name, now a real form control. -->
+                      <input
+                        type="text"
+                        class="form-control step-name-input"
+                        [formControl]="getNameCtrl(ctrl)"
+                        maxlength="200"
+                        [attr.aria-label]="'Name für Schritt ' + ($index + 1)"
+                        [title]="getStepName(p.key, $index)"
+                      />
+                      <!-- Per-step role picker (REQ-108), agile processes only. Plain component
+                           state, not a FormControl — reads/writes the live array getRollen()
+                           already returns, same direct-mutation pattern as addStep/removeStep. -->
+                      @if (showsRollen(p.key)) {
+                        <select
+                          class="form-select step-role-select"
+                          [value]="getStepRole(p.key, $index) ?? ''"
+                          (change)="setStepRole(p.key, $index, $any($event.target).value)"
+                          [attr.aria-label]="'Rolle für Schritt ' + ($index + 1)"
+                        >
+                          <option value="">— Keine —</option>
+                          <option value="BA">BA</option>
+                          <option value="Dev">Dev</option>
+                          <option value="Tester">Tester</option>
+                        </select>
+                      }
                       <span class="text-muted small">{{ p.arbeitszeitLabel }}:</span>
+                      <!-- Name read site 5/6: the value input's spoken label. -->
                       <input
                         type="number"
                         class="form-control input-number"
                         [formControl]="getValueCtrl(ctrl)"
                         min="0"
                         [attr.max]="getValueMax(ctrl)"
-                        [attr.aria-label]="p.labels[$index] + ' – ' + p.arbeitszeitLabel + ' (Wert)'"
+                        [attr.aria-label]="getStepName(p.key, $index) + ' – ' + p.arbeitszeitLabel + ' (Wert)'"
                         [attr.aria-describedby]="getValueCtrl(ctrl).invalid && getValueCtrl(ctrl).touched ? p.key + '-work-err-' + $index : null"
                       />
+                      <!-- Name read site 6/6: the unit select's spoken label. -->
                       <select
                         class="form-select w-auto"
                         [formControl]="getUnitCtrl(ctrl)"
-                        [attr.aria-label]="p.labels[$index] + ' – ' + p.arbeitszeitLabel + ' (Einheit)'"
+                        [attr.aria-label]="getStepName(p.key, $index) + ' – ' + p.arbeitszeitLabel + ' (Einheit)'"
                       >
                         @for (einheit of zeiteinheiten; track einheit) {
                           <option [value]="einheit">{{ einheit }}</option>
                         }
                       </select>
+                      <button
+                        type="button"
+                        class="btn btn-outline-danger step-remove-btn"
+                        [attr.aria-label]="'Schritt ' + ($index + 1) + ' entfernen'"
+                        [attr.aria-disabled]="isRemoveBlocked(p.key) ? 'true' : null"
+                        [attr.aria-describedby]="isRemoveBlocked(p.key) ? p.key + '-remove-blocked-' + $index : null"
+                        (click)="removeStep(p.key, $index)"
+                      >
+                        Entfernen
+                      </button>
+                      @if (isRemoveBlocked(p.key)) {
+                        <span [id]="p.key + '-remove-blocked-' + $index" class="step-limit-reason">Mindestens 1 Schritt erforderlich.</span>
+                      }
                       @if (getValueCtrl(ctrl).invalid && getValueCtrl(ctrl).touched) {
                         <div [id]="p.key + '-work-err-' + $index" class="text-danger small">
                           Wert muss zwischen 0 und {{ getValueMax(ctrl).toLocaleString('de-DE') }} liegen.
@@ -422,7 +493,7 @@
                     </div>
                   </div>
 
-                  <!-- Wait row after this step (only if not last) -->
+                  <!-- Wait row after this step (only if not last) — shape, indentation and left border untouched -->
                   @if ($index < getWaitsArray(p.key).controls.length) {
                     <div class="mb-2">
                       <div class="wait-row">
@@ -454,6 +525,28 @@
                     </div>
                   }
                 }
+
+                <!--
+                  "Schritt hinzufügen": appends one step + one wait at the end of this
+                  process (REQ-101). Stays focusable-but-blocked at the 50-step cap via
+                  aria-disabled (never the native disabled attribute, see the
+                  [aria-disabled='true'] style), with a persistently visible reason next to it.
+                -->
+                <div class="step-actions mt-3">
+                  <button
+                    type="button"
+                    class="btn btn-outline-primary step-add-btn"
+                    [attr.aria-label]="'Schritt hinzufügen zu ' + p.titel"
+                    [attr.aria-disabled]="isAddBlocked(p.key) ? 'true' : null"
+                    [attr.aria-describedby]="isAddBlocked(p.key) ? p.key + '-add-blocked' : null"
+                    (click)="addStep(p.key)"
+                  >
+                    Schritt hinzufügen
+                  </button>
+                  @if (isAddBlocked(p.key)) {
+                    <span [id]="p.key + '-add-blocked'" class="step-limit-reason">Maximal 50 Schritte erreicht.</span>
+                  }
+                </div>
               </div>
             </form>
           </ng-template>

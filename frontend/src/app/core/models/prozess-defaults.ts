@@ -28,10 +28,22 @@ const MENSCHLICH_LABELS: string[] = [
   'Tester bestätigt, setzt Ticket auf „Bereit für Deployment"',
 ];
 
+/**
+ * Example step names, used ONLY as the seed for each process's initial step list.
+ * At runtime a step's name lives in its own form data (RechnerComponent), because
+ * steps can be added, removed and renamed — a position-matched constant would go
+ * stale on the first add or remove.
+ *
+ * Read-only by contract: never mutate these arrays, and never hand one of them
+ * straight into per-process runtime state. `menschlich` and `agileKi` are the very
+ * same array object (see below), so an in-place edit would corrupt the sibling tab.
+ * Copy on seed (`[...PROZESS_STEP_LABELS[key]]`).
+ */
 export const PROZESS_STEP_LABELS: Record<ProzessKey, string[]> = {
   menschlich: MENSCHLICH_LABELS,
   // Same reference as `menschlich` — Agile mit KI walks the identical process steps,
-  // only the work durations differ (see DEFAULT_DURATIONS below).
+  // only the work durations differ (see DEFAULT_DURATIONS below). Asserted by
+  // prozess-defaults.spec.ts; keep it shared and read-only.
   agileKi: MENSCHLICH_LABELS,
   halbautomatisch: [
     'Auslöser: Anfrage oder Fehler',
@@ -89,6 +101,11 @@ export const DEFAULT_DURATIONS: Record<ProzessKey, ProzessDauer> = {
  * 19 elements (step 1 = index 0, the trigger step, has no role). Same array
  * reference for both `menschlich` and `agileKi` — the role assignment per step
  * does not change between the two, only the durations do.
+ *
+ * Seed only, exactly like PROZESS_STEP_LABELS: at runtime each agile process owns
+ * its own role array (RechnerComponent), seeded once by copying from here. A role
+ * is never re-derived from a step's position after that initial build — remove one
+ * step and every later step would silently report the wrong role.
  */
 const MENSCHLICH_ROLLEN: (Rolle | null)[] = [
   null, 'BA', 'BA', 'BA', 'BA',
@@ -106,7 +123,18 @@ export const PROZESS_ROLLEN: Record<'menschlich' | 'agileKi', (Rolle | null)[]> 
 export interface ProzessDescriptor {
   key: ProzessKey;
   titel: string;
+  /**
+   * Example step names this process STARTS with. Seed only — see PROZESS_STEP_LABELS.
+   * Points at the shared, read-only array for this key; never mutate it.
+   */
   labels: string[];
+  /**
+   * How many steps this process STARTS with — not how many it has right now.
+   * Steps can be added and removed, so every live reader (tab caption, bar
+   * description, flow-diagram group label) asks the form for the current count
+   * instead (`RechnerComponent.getLiveStepCount()`). Still used to seed the form
+   * and still asserted by prozess-defaults.spec.ts (19/19/11/2).
+   */
   stepCount: number;
   /** Label for the per-step "work" input — 'Arbeitszeit' for the two agile processes, 'KI-Arbeitszeit' for the two KI processes. */
   arbeitszeitLabel: string;

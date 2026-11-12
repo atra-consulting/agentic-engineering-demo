@@ -78,29 +78,54 @@ export const ChanceCreateSchema = z.object({
 export type ChanceCreateDTO = z.infer<typeof ChanceCreateSchema>;
 
 // ─── Szenario ─────────────────────────────────────────────────────────────────
-export const PROCESS_STEP_COUNTS = { human: 19, agileKi: 19, semiAutomated: 11, automated: 2 } as const;
-
 const DurationSchema = z
   .number()
   .int('Muss eine ganze Zahl sein')
   .min(0, 'Darf nicht negativ sein')
   .max(479520, 'Maximal 999 Tage');
 
-function prozessSchema(workCount: number) {
-  return z.object({
-    works: z.array(DurationSchema).length(workCount, `Genau ${workCount} Arbeitszeiten`),
-    waits: z
-      .array(DurationSchema)
-      .length(workCount - 1, `Genau ${workCount - 1} Wartezeiten`),
-  });
+const StepNameSchema = z.string().max(200, 'Maximal 200 Zeichen');
+
+// A process is a chain of N steps with N-1 waits between them (a wait always
+// belongs to the step before it). works.length and waits.length are sibling
+// fields on the same object, so "one fewer wait than steps" is a cross-field
+// rule and cannot be expressed as two independent per-array .length() calls.
+// It is enforced below via .superRefine() with an explicit error path, so the
+// emitted field-error key keeps its existing dotted shape (e.g. "humanSteps.waits").
+function prozessSchema() {
+  return z
+    .object({
+      works: z
+        .array(DurationSchema)
+        .min(1, 'Mindestens 1 Arbeitszeit')
+        .max(50, 'Maximal 50 Arbeitszeiten'),
+      waits: z.array(DurationSchema),
+      names: z.array(StepNameSchema).optional(),
+    })
+    .superRefine((val, ctx) => {
+      if (val.waits.length !== val.works.length - 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Genau ${val.works.length - 1} Wartezeiten`,
+          path: ['waits'],
+        });
+      }
+      if (val.names !== undefined && val.names.length !== val.works.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Genau ${val.works.length} Namen`,
+          path: ['names'],
+        });
+      }
+    });
 }
 
 export const SzenarioSchema = z.object({
   name: z.string().min(1, 'Name ist erforderlich'),
-  humanSteps: prozessSchema(PROCESS_STEP_COUNTS.human),
-  agileKiSteps: prozessSchema(PROCESS_STEP_COUNTS.agileKi),
-  semiAutomatedSteps: prozessSchema(PROCESS_STEP_COUNTS.semiAutomated),
-  automatedSteps: prozessSchema(PROCESS_STEP_COUNTS.automated),
+  humanSteps: prozessSchema(),
+  agileKiSteps: prozessSchema(),
+  semiAutomatedSteps: prozessSchema(),
+  automatedSteps: prozessSchema(),
 });
 export type SzenarioCreateDTO = z.infer<typeof SzenarioSchema>;
 
